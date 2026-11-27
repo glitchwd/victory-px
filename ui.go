@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -90,12 +91,28 @@ type model struct {
 	upstream                      upstreamResult
 	upstreamErr                   error
 	checkingUpstream              bool
+	forkMenu                      bool
+	forkIndex                     int
+	forkError                     string
+	pickingPath                   bool
 }
 
 func newModel(ctx context.Context, workers *sync.WaitGroup, cfg config) *model {
 	gamescope, _ := exec.LookPath("gamescope")
 	nvidiaSMI, _ := exec.LookPath("nvidia-smi")
-	return &model{ctx: ctx, workers: workers, cfg: cfg, gamescope: gamescope, nvidiaSMI: nvidiaSMI, logs: make([]logLine, 0, logCapacity)}
+	if cfg.forkName == "" && cfg.dir != "" && cfg.binary != "" {
+		for _, build := range cfg.forks {
+			if build.Dir == cfg.dir && build.Binary == cfg.binary {
+				cfg.forkName = build.Name
+				break
+			}
+		}
+		if cfg.forkName == "" {
+			cfg.forks = append(cfg.forks, forkBuild{Dir: cfg.dir, Binary: cfg.binary})
+		}
+	}
+	return &model{ctx: ctx, workers: workers, cfg: cfg, gamescope: gamescope, nvidiaSMI: nvidiaSMI, logs: make([]logLine, 0, logCapacity),
+		forkMenu: cfg.dir == "" || cfg.title == ""}
 }
 
 func (m *model) Init() tea.Cmd {
@@ -116,6 +133,11 @@ func (m *model) checkUpstream() tea.Cmd {
 
 func (m *model) start(op operation) tea.Cmd {
 	if m.cancelRun != nil {
+		return nil
+	}
+	if m.cfg.binary == "" || m.cfg.title == "" {
+		m.openForkMenu()
+		m.forkError = "Choose a VIctory build and the game executable first."
 		return nil
 	}
 	ctx, cancel := context.WithCancel(m.ctx)
@@ -267,11 +289,24 @@ func (m *model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case upstreamTick:
 		return m, tea.Batch(m.checkUpstream(), nextUpstreamCheck())
 	case upstreamResult:
-		m.checkingUpstream, m.upstreamErr = false, msg.err
-		if msg.err == nil {
-			m.upstream = msg
+		m.checkingUpstream = false
+		if msg.directory == "" || msg.directory == m.cfg.dir {
+			m.upstreamErr = msg.err
+			if msg.err == nil {
+				m.upstream = msg
+			}
+		}
+	case pickerResult:
+		m.pickingPath = false
+		m.applyPickerResult(msg)
+	case tea.MouseMsg:
+		if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
+			return m, m.forkClick(msg.X, msg.Y)
 		}
 	case tea.KeyMsg:
+		if m.forkMenu && msg.String() != "q" && msg.String() != "ctrl+c" {
+			return m, m.forkMenuKey(msg.String())
+		}
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -302,6 +337,8 @@ func (m *model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "d":
 			m.displayTab = !m.displayTab
 			m.portTab = false
+		case "b":
+			m.openForkMenu()
 		case "p", "i", "o", "a", "l", "enter":
 			if m.displayTab {
 				m.changeDisplay(msg.String())
@@ -361,6 +398,232 @@ func (m *model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+func (m *model) openForkMenu() {
+	m.forkMenu, m.forkError = true, ""
+	for i, build := range m.cfg.forks {
+		if build.Name == m.cfg.forkName {
+			m.forkIndex = i
+			break
+		}
+	}
+}
+
+func (m *model) forkMenuKey(key string) tea.Cmd {
+	if m.pickingPath {
+		return nil
+	}
+	switch key {
+	case "esc", "b":
+		m.forkMenu = false
+	case "up":
+		cols, _, _ := m.forkGridSize()
+		m.forkIndex = max(0, m.forkIndex-cols)
+	case "down":
+		cols, _, _ := m.forkGridSize()
+		m.forkIndex = min(m.forkIndex+cols, len(m.cfg.forks))
+	case "left":
+		m.forkIndex = max(0, m.forkIndex-1)
+	case "right":
+		m.forkIndex = min(m.forkIndex+1, len(m.cfg.forks))
+	case "enter", "n", "e", "g", "f":
+		if m.cancelRun != nil {
+			m.forkError = "Stop the session with S after closing this menu."
+			return nil
+		}
+		switch key {
+		case "enter":
+			if m.forkIndex < len(m.cfg.forks) {
+				m.applyFork(m.cfg.forks[m.forkIndex])
+			} else {
+				m.pickingPath, m.forkError = true, ""
+				return chooseFork(m.ctx, forkBuild{}, m.cfg.dir, m.cfg.forks)
+			}
+		case "n":
+			m.pickingPath, m.forkError = true, ""
+			return chooseFork(m.ctx, forkBuild{}, m.cfg.dir, m.cfg.forks)
+		case "e":
+			if m.forkIndex >= len(m.cfg.forks) || m.cfg.forks[m.forkIndex].Name == "" {
+				m.forkError = "Select a saved build to edit, or use N to add one."
+				return nil
+			}
+			m.pickingPath, m.forkError = true, ""
+			return chooseFork(m.ctx, m.cfg.forks[m.forkIndex], "", nil)
+		case "g", "f":
+			m.pickingPath, m.forkError = true, ""
+			return chooseGame(m.ctx, m.cfg.title, key == "f")
+		}
+	}
+	return nil
+}
+
+func (m *model) applyFork(build forkBuild) {
+	previousDir := m.cfg.dir
+	if err := m.cfg.selectFork(build); err != nil {
+		m.forkError = err.Error()
+		return
+	}
+	if previousDir != m.cfg.dir {
+		m.upstream, m.upstreamErr = upstreamResult{}, nil
+	}
+	m.forkMenu, m.forkError = m.cfg.title == "", ""
+	m.notice = "Selected fork: " + build.label()
+}
+
+func (m *model) applyPickerResult(result pickerResult) {
+	if result.err != nil {
+		if !errors.Is(result.err, errPickerCanceled) {
+			m.forkError = result.err.Error()
+		}
+		return
+	}
+	if result.build.Name != "" {
+		if err := saveForkBuild(result.build); err != nil {
+			m.forkError = err.Error()
+			return
+		}
+		for i, build := range m.cfg.forks {
+			if build.Name == result.build.Name {
+				m.cfg.forks[i] = result.build
+				m.forkIndex = i
+				m.applyFork(result.build)
+				return
+			}
+		}
+		m.cfg.forks = append(m.cfg.forks, result.build)
+		m.forkIndex = len(m.cfg.forks) - 1
+		m.applyFork(result.build)
+		return
+	}
+	cfg := m.cfg
+	if err := cfg.selectTitle(result.title); err != nil {
+		m.forkError = err.Error()
+		return
+	}
+	path, err := gameConfigPath()
+	if err == nil {
+		err = writeLocalConfig(path, cfg.title)
+	}
+	if err != nil {
+		m.forkError = err.Error()
+		return
+	}
+	m.cfg.title = cfg.title
+	m.notice = "Game selected: " + filepath.Base(cfg.title)
+}
+
+var forkActions = [...]struct{ key, label string }{
+	{"n", "N Add build"},
+	{"e", "E Edit build"},
+	{"g", "G Choose game executable"},
+	{"f", "F Choose game folder"},
+}
+
+func (m *model) forkGridSize() (cols, rows, start int) {
+	cols = max(1, min(4, m.width/20))
+	rows = max(1, (m.height-10)/3)
+	perPage := cols * rows
+	start = (m.forkIndex / perPage) * perPage
+	return
+}
+
+func (m *model) forkClick(x, y int) tea.Cmd {
+	rows := strings.Split(ansi.Strip(m.View()), "\n")
+	if y < 0 || y >= len(rows) || x < 0 || x >= ansi.StringWidth(rows[y]) {
+		return nil
+	}
+	if !m.forkMenu {
+		line := rows[y]
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && (fields[0] == "B" && fields[1] == "Forks" || fields[0] == "S" && fields[1] == "Run/stop") {
+			at := strings.LastIndex(line, "Forks")
+			if at < 0 {
+				return nil
+			}
+			before := strings.TrimRight(line[:at], " ")
+			left, right := ansi.StringWidth(before)-1, ansi.StringWidth(line[:at])+len("Forks")
+			if strings.HasSuffix(before, "B") && x >= left && x < right {
+				m.openForkMenu()
+			}
+		}
+		return nil
+	}
+	if m.pickingPath || m.width < 32 || m.height < 13 {
+		return nil
+	}
+	cols, gridRows, start := m.forkGridSize()
+	cellWidth := m.width / cols
+	if y >= 3 && y < 3+gridRows*3 && x < cols*cellWidth {
+		index := start + ((y-3)/3)*cols + x/cellWidth
+		if index > len(m.cfg.forks) {
+			index = len(m.cfg.forks)
+		}
+		m.forkIndex = index
+		return m.forkMenuKey("enter")
+	}
+	action := y - (4 + gridRows*3)
+	if action >= 0 && action < len(forkActions) {
+		return m.forkMenuKey(forkActions[action].key)
+	}
+	return nil
+}
+
+func (m *model) forkMenuView() string {
+	if m.width < 32 || m.height < 13 {
+		return clip("Resize terminal • Esc Back", m.width)
+	}
+	rows := []string{heading.Render("VIctory forks")}
+	game := "Choose an executable or folder"
+	if m.cfg.title != "" {
+		game = terminalText(filepath.Base(m.cfg.title))
+	}
+	rows = append(rows, "Game · "+game, muted.Render("Choose a slot"))
+	cols, gridRows, start := m.forkGridSize()
+	cellWidth := m.width / cols
+	for row := 0; row < gridRows; row++ {
+		var top, middle, bottom strings.Builder
+		for col := 0; col < cols; col++ {
+			index := start + row*cols + col
+			label, state := "+ Add build", ""
+			if index < len(m.cfg.forks) {
+				build := m.cfg.forks[index]
+				label = terminalText(build.label())
+				if build.Name == m.cfg.forkName {
+					state = "ACTIVE"
+				}
+			} else if index > len(m.cfg.forks) {
+				label = ""
+			}
+			color := slate
+			if index == m.forkIndex {
+				color = cyan
+			} else if state != "" {
+				color = blue
+			}
+			top.WriteString(ink(color, "┌"+strings.Repeat("─", cellWidth-2)+"┐"))
+			middle.WriteString(ink(color, "│") + fit(clip(label, cellWidth-4), cellWidth-2) + ink(color, "│"))
+			bottom.WriteString(ink(color, "└"+fit(state, cellWidth-2)+"┘"))
+		}
+		rows = append(rows, top.String(), middle.String(), bottom.String())
+	}
+	rows = append(rows, "")
+	for _, action := range forkActions {
+		rows = append(rows, ink(blue, action.label))
+	}
+	switch {
+	case m.pickingPath:
+		rows = append(rows, "Waiting for system picker…")
+	case m.forkError != "":
+		rows = append(rows, failure.Render(terminalText(m.forkError)))
+	default:
+		rows = append(rows, "")
+	}
+	rows = append(rows, muted.Render("Arrows Select · Enter Open · E Edit · Esc Back"))
+	for i, row := range rows {
+		rows[i] = clip(row, m.width)
+	}
+	return strings.Join(rows, "\n")
 }
 
 func (m *model) cycleTab(direction int) {
@@ -470,8 +733,15 @@ func (m *model) upstreamStatus() string {
 func (m *model) upstreamRows(width int) []string {
 	u := m.upstream
 	rows := []string{m.upstreamStatus()}
+	if u.repository != "" {
+		rows = append(rows, u.repository)
+	}
 	if u.sha != "" {
-		rows = append(rows, upstreamBranch+" · "+u.sha[:8])
+		branch := u.branch
+		if branch == "" {
+			branch = upstreamBranch
+		}
+		rows = append(rows, branch+" · "+u.sha[:8])
 		if u.releaseErr != nil {
 			rows = append(rows, "Release check failed · "+u.releaseErr.Error())
 		} else {
@@ -493,7 +763,7 @@ func (m *model) upstreamRows(width int) []string {
 
 func (m *model) displayMenu() []string {
 	if !m.cfg.gamescope {
-		backend := "G  Wine direct"
+		backend := "G  Direct display"
 		if m.gamescope == "" {
 			backend += " (Gamescope unavailable)"
 		}
@@ -541,9 +811,9 @@ func (m *model) compactView() string {
 	if m.notice != "" {
 		rows = append(rows, terminalText(m.notice))
 	}
-	footer := []string{"S Run/stop · T Translate · C Console · Q Quit", "Tab/D Display · F Filter · [/] Log · R/Y Report · U"}
+	footer := []string{"S Run/stop · T Translate · C Console · Q Quit", "B Forks · Tab/D Display · F Filter · [/] Log · R/Y Report · U"}
 	if m.width < 56 {
-		footer = []string{"S Run/stop · T Translate · Q Quit", "Tab/D Display · C Console", "F Filter · [/] Scroll · R/Y Report"}
+		footer = []string{"S Run/stop · T Translate · Q Quit", "B Forks · Tab/D Display · C Console", "F Filter · [/] Scroll · R/Y Report"}
 	}
 	if m.displayTab {
 		footer = []string{"Tab PortWatch · S Run/stop · D/Q"}
@@ -554,14 +824,15 @@ func (m *model) compactView() string {
 		rows = rows[:min(len(rows), m.height-len(footer))]
 	} else if m.portTab {
 		footer = []string{"U Refresh · Tab Monitor · Q Quit"}
-		rows = append(rows, heading.Render("Belobug · GitHub"))
+		rows = append(rows, heading.Render("Selected fork · GitHub"))
 		rows = append(rows, m.upstreamRows(m.width)...)
 		rows = append(rows, m.portWatch()...)
 		rows = rows[:min(len(rows), m.height-len(footer))]
 	} else {
 		space := m.height - len(footer)
 		metrics := []string{
-			"Belobug · " + m.upstreamStatus(),
+			"Fork · " + (forkBuild{Name: m.cfg.forkName}).label(),
+			"Runtime · " + m.runtimeName(),
 			m.target(),
 			m.frameReadout(),
 			m.ramReadout(),
@@ -788,13 +1059,23 @@ func (m *model) target() string {
 		profile = "Series S"
 	}
 	if !gamescope {
-		return profile + " · Wine direct"
+		return profile + " · Direct display"
 	}
 	preset := "custom"
 	if i := display.presetIndex(); i >= 0 {
 		preset = displayPresets[i].name
 	}
 	return profile + " · Gamescope " + preset
+}
+
+func (m *model) runtimeName() string {
+	if m.cfg.runtimeLabel != "" {
+		return m.cfg.runtimeLabel
+	}
+	if m.cfg.wine != "" {
+		return filepath.Base(m.cfg.wine)
+	}
+	return "Not configured"
 }
 
 func (m *model) uptime() string {
@@ -900,10 +1181,12 @@ func (m *model) headerBox() string {
 		"         " + strings.Join(gpuDetails, " · "),
 		display("Target", m.target()),
 		display("Uptime", m.uptime()),
+		display("Fork", (forkBuild{Name: m.cfg.forkName}).label()),
 	}
 	if m.width < 128 || m.portTab || m.displayTab {
-		info = append(info, display("Belobug", m.upstreamStatus()))
+		info = append(info, display("GitHub", m.upstreamStatus()))
 	}
+	info = append(info, display("Runtime", m.runtimeName()))
 	hot := []string{m.statusPill(), m.ramReadout(), m.vramReadout(), m.gpuReadout(), m.frameReadout()}
 	const hotWidth, gap = 30, "  "
 	width := m.width - 4
@@ -969,7 +1252,7 @@ func (m *model) midPanels(height int) string {
 		frame(rightW, height, "Host · GPU history", purple, purple, right),
 	}
 	if upstreamW > 0 {
-		panels = append(panels, " ", frame(upstreamW, height, "Belobug · GitHub", magenta, slate, m.upstreamRows(upstreamW-4)))
+		panels = append(panels, " ", frame(upstreamW, height, "Selected fork · GitHub", magenta, slate, m.upstreamRows(upstreamW-4)))
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, panels...)
 }
@@ -998,7 +1281,7 @@ func (m *model) footer() string {
 	if m.portTab {
 		return join(key("U", "Refresh"), key("Tab", "Monitor"), key("D", "Display"), key("Q", "Quit"))
 	}
-	return join(key("S", "Run/stop"), key("T", "Translate"), key("C", "Console"), key("Tab/D", "Display")) +
+	return join(key("S", "Run/stop"), key("T", "Translate"), key("C", "Console"), key("Tab/D", "Display"), key("B", "Forks")) +
 		"\n" + join(key("F", "Filter"), key("[/]", "Scroll"), key("R", "Report"), key("Y", "Copy"), key("U", "Updates"), key("Q", "Quit"))
 }
 
@@ -1026,7 +1309,7 @@ func (m *model) bottomPanel(height int) string {
 	case m.portTab:
 		leftW := (m.width - 1) / 2
 		return lipgloss.JoinHorizontal(lipgloss.Top,
-			frame(leftW, height, "Belobug · GitHub", magenta, slate, m.upstreamRows(leftW-4)),
+			frame(leftW, height, "Selected fork · GitHub", magenta, slate, m.upstreamRows(leftW-4)),
 			" ", frame(m.width-1-leftW, height, "PortWatch · public headlines", cyan, cyan, append(body, m.portWatch()[1:]...)))
 	default:
 		filter := [...]string{"All", "Warnings/errors", "Metrics"}
@@ -1049,6 +1332,9 @@ func (m *model) bottomPanel(height int) string {
 }
 
 func (m *model) View() string {
+	if m.forkMenu {
+		return m.forkMenuView()
+	}
 	if m.width < 76 || m.height < 24 {
 		return m.compactView()
 	}
