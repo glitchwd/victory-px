@@ -1,0 +1,56 @@
+name: Linux release
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/release.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: linux-release
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      RELEASE_VERSION: v0.1.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: '1.26.x'
+          cache: false
+      - name: Test and package
+        run: |
+          go test -race ./...
+          mkdir -p dist/package
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
+            -ldflags="-X main.releaseVersion=$RELEASE_VERSION" -o dist/package/victory-px .
+          test "$(dist/package/victory-px --version)" = "victory-px $RELEASE_VERSION"
+          cp README.md LICENSE dist/package/
+          tar -czf dist/victory-px-linux-amd64.tar.gz -C dist/package victory-px README.md LICENSE
+          (cd dist && sha256sum victory-px-linux-amd64.tar.gz > SHA256SUMS)
+      - name: Publish and verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_status=$(gh release view "$RELEASE_VERSION" --json isDraft --jq .isDraft 2>/dev/null || true)
+          if [[ "$release_status" == true ]]; then
+            gh release upload "$RELEASE_VERSION" dist/victory-px-linux-amd64.tar.gz dist/SHA256SUMS --clobber
+            gh release edit "$RELEASE_VERSION" --draft=false
+          elif [[ "$release_status" != false ]]; then
+            gh release create "$RELEASE_VERSION" dist/victory-px-linux-amd64.tar.gz dist/SHA256SUMS \
+              --target "$GITHUB_SHA" --title "Victory-PX $RELEASE_VERSION" \
+              --notes 'Linux x86-64 build with Gamescope display presets, a local log dashboard, and GitHub update checks for Belobug.'
+          fi
+          test "$(gh release view "$RELEASE_VERSION" --json isDraft --jq .isDraft)" = false
+          mkdir -p dist/verify
+          gh release download "$RELEASE_VERSION" --dir dist/verify --pattern victory-px-linux-amd64.tar.gz --pattern SHA256SUMS
+          (cd dist/verify && sha256sum --check SHA256SUMS)
