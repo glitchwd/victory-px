@@ -59,12 +59,62 @@ inherits your environment and Wine configuration.
 
 ## Build compatibility
 
-Belobug is the build used for the initial compatibility experiments. To try
-another fork, point `--victory-dir` and `--victory-bin` at your build. Its CLI
-must accept `run <title> --execute --console <profile>`. The optional shader
-translation action also requires `translate <archive>`. Log metrics depend on
-the build's output format. The GitHub update check tracks Belobug's
-`a-publier` branch.
+Open **B Forks** with a click or the B key. Builds appear in an inventory of
+slots. Click a build to select it, or move with the arrow keys and press Enter.
+Click an empty slot to add a build. The grid moves through pages as needed.
+You can switch builds while the session is stopped. The title, Wine executable,
+console and display settings carry over.
+
+On a Linux desktop with Zenity installed, **Add build** opens system dialogs
+for the name, working folder and Windows executable of a compiled build.
+**Edit build** changes the paths of the highlighted saved build.
+**Choose game executable** opens the file picker directly. **Choose game folder**
+opens a folder picker, followed by the executable picker in that folder.
+The selected game executable is remembered for later runs. If either input is
+missing when Victory-PX opens, it starts in the fork picker.
+
+You can also register builds and select them from the command line.
+
+```sh
+./victory-px --save-fork belobug --victory-dir /path/to/VIctory-Belobug-AMD
+./victory-px --save-fork fxceless --victory-dir /path/to/victory-fork \
+  --victory-bin /path/to/victory-fork/target/x86_64-pc-windows-msvc/release/victory.exe
+./victory-px --list-forks
+./victory-px --fork belobug --exe /path/to/title.exe
+```
+
+Profiles live in `$XDG_CONFIG_HOME/victory-px/forks` (default
+`~/.config/victory-px/forks`). Saving a name again updates its paths. With only
+`--exe`, Victory-PX starts with the first available build in alphabetical order,
+unless a working directory is supplied through `VICTORY_DIR`. You can still
+launch a build directly with `--victory-dir` and `--victory-bin`.
+
+Each build must accept `run <title> --execute --console <profile>`. The optional
+shader translation action also requires `translate <archive>`. Log metrics
+depend on the build's output format. The GitHub update check uses the selected
+build's local Git origin and active branch. For a build without a Git checkout,
+the update status is unavailable.
+
+### VIctory-NVIDIA-RT
+
+Register the release executable as the `nvidia-rt` build from **B Forks** (or
+with `--save-fork nvidia-rt --victory-dir DIR --victory-bin FILE`). PX uses the
+fork's `play` command and its published fast-path settings, while keeping the
+normal run/stop controls and optional Gamescope session. It starts the Series X
+profile by default; press **C** to use Series S. **T Translate** is unavailable
+for this build.
+
+`./launch-nvidia-rt.sh` opens PX with this build selected and the existing
+GE-Proton prefix. It does not start the game: **U** refreshes the release
+monitor immediately, and **S** starts the session when you are ready.
+
+With `nvidia-rt` selected, PX checks
+[Kemerd/VIctory-NVIDIA-RT](https://github.com/Kemerd/VIctory-NVIDIA-RT/releases)
+on startup and every 15 minutes. It reports the newest published release,
+including prereleases, in PortWatch; **U** refreshes it immediately. The
+release page can change independently of the installed executable, so PX
+reports the upstream version and publication time rather than claiming the
+local binary is current.
 
 When sharing a result, include the build or commit, Wine version, GPU, and
 Gamescope preset (or Wine direct).
@@ -76,10 +126,11 @@ Gamescope preset (or Wine direct).
 | S | Run the title or stop the current session |
 | T | Ask VIctory to translate `shaders.rpf` beside the title executable |
 | C / D | Change the console profile or open Display settings |
+| B | Choose a saved VIctory build |
 | F / [ / ] | Change the log filter or scroll |
 | R / Y | Save the session summary or copy it to the clipboard |
 | Tab / Shift+Tab | Cycle through Monitor, Display and PortWatch forwards or backwards |
-| U | Check Belobug on GitHub. In PortWatch, also refresh public headlines |
+| U | Check the selected build on GitHub. In PortWatch, also refresh public headlines |
 | Q / Ctrl+C | Quit and stop the current session |
 
 Clipboard copy uses `wl-copy` on Wayland or
@@ -137,12 +188,12 @@ Use `--save-log` to retain raw child output under
 created with mode `0600`. Each raw log stops at 32 MiB. It can contain private
 data, so review it before sharing.
 
-Press U to check the public Belobug `a-publier` branch and latest stable
+Press U to check the selected checkout's public GitHub branch and latest stable
 GitHub release. Use `--check-updates` to check at startup and every 15 minutes
 while the companion is open. The Monitor shows the update status. PortWatch
 shows the public commit, release, and time of the last successful check.
 
-The GitHub requests use fixed public endpoints and no credentials. The
+The GitHub requests use public endpoints derived from the selected checkout and no credentials. The
 comparison with the checked-out Git revision runs locally with Git lazy
 fetching disabled. The checker does not fetch Git objects, install a release,
 or verify which commit the existing `victory.exe` was built from. Without

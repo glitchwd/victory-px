@@ -71,6 +71,11 @@ func (d displayOptions) gamescopeArgs() []string {
 	return args
 }
 
+func (d displayOptions) gamescopeArgsWithoutFSR() []string {
+	d.fsr = false
+	return d.gamescopeArgs()
+}
+
 var displaySizes = [...]resolution{
 	{960, 540}, {1280, 720}, {1280, 800}, {1600, 900}, {1920, 1080}, {1920, 1200},
 }
