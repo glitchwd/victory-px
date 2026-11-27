@@ -33,6 +33,9 @@ type upstreamResult struct {
 	directory                       string
 	repository, branch              string
 	commitAt, checkedAt             time.Time
+	publishedAt                     time.Time
+	assetCount                      int
+	releaseOnly                     bool
 	err, releaseErr                 error
 }
 
@@ -60,6 +63,59 @@ func refreshUpstream(ctx context.Context, dir string) tea.Cmd {
 		}
 		return result
 	}
+}
+
+func refreshBuildUpstream(ctx context.Context, build forkBuild) tea.Cmd {
+	if repo := build.releaseRepository(); repo != "" {
+		return refreshLatestRelease(ctx, build.Dir, repo)
+	}
+	return refreshUpstream(ctx, build.Dir)
+}
+
+func refreshLatestRelease(ctx context.Context, dir, repo string) tea.Cmd {
+	return func() tea.Msg {
+		client := &http.Client{
+			Timeout: 5 * time.Second,
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+		result := readLatestRelease(ctx, client, "https://api.github.com/repos/"+repo+"/releases?per_page=1")
+		result.directory = dir
+		result.repository = repo
+		return result
+	}
+}
+
+func readLatestRelease(ctx context.Context, client *http.Client, endpoint string) (result upstreamResult) {
+	result.checkedAt = time.Now()
+	result.releaseOnly = true
+	var releases []struct {
+		Tag         string     `json:"tag_name"`
+		Name        string     `json:"name"`
+		PublishedAt time.Time  `json:"published_at"`
+		Assets      []struct{} `json:"assets"`
+	}
+	_, result.err = githubJSON(ctx, client, endpoint, &releases)
+	if result.err != nil {
+		return
+	}
+	if len(releases) == 0 {
+		result.release = "None published"
+		return
+	}
+	release := releases[0]
+	result.release = clip(terminalText(release.Tag), 120)
+	if result.release == "" {
+		result.release = clip(terminalText(release.Name), 120)
+	}
+	if result.release == "" {
+		result.releaseErr = errors.New("invalid release response")
+		return
+	}
+	result.publishedAt = release.PublishedAt
+	result.assetCount = len(release.Assets)
+	return
 }
 
 func readUpstream(ctx context.Context, client *http.Client, endpoint string) (result upstreamResult) {

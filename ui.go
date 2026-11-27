@@ -117,7 +117,7 @@ func newModel(ctx context.Context, workers *sync.WaitGroup, cfg config) *model {
 
 func (m *model) Init() tea.Cmd {
 	cmds := []tea.Cmd{tea.SetWindowTitle(interfaceTitle), sampleHost(m.ctx, m.nvidiaSMI, 0), readHeader(m.ctx, m.nvidiaSMI)}
-	if m.cfg.checkUpdates {
+	if m.cfg.checkUpdates || m.cfg.forkName == nvidiaRTForkName {
 		cmds = append(cmds, m.checkUpstream(), nextUpstreamCheck())
 	}
 	return tea.Batch(cmds...)
@@ -128,7 +128,7 @@ func (m *model) checkUpstream() tea.Cmd {
 		return nil
 	}
 	m.checkingUpstream = true
-	return refreshUpstream(m.ctx, m.cfg.dir)
+	return refreshBuildUpstream(m.ctx, forkBuild{Name: m.cfg.forkName, Dir: m.cfg.dir})
 }
 
 func (m *model) start(op operation) tea.Cmd {
@@ -299,6 +299,9 @@ func (m *model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case pickerResult:
 		m.pickingPath = false
 		m.applyPickerResult(msg)
+		if !m.forkMenu && m.cfg.forkName == nvidiaRTForkName {
+			return m, tea.Batch(m.checkUpstream(), nextUpstreamCheck())
+		}
 	case tea.MouseMsg:
 		if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
 			return m, m.forkClick(msg.X, msg.Y)
@@ -352,6 +355,10 @@ func (m *model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.session.state = stopping
 			m.cancelRun()
 		case "t":
+			if m.cfg.forkName == nvidiaRTForkName {
+				m.notice = "Shader translation is not available in VIctory NVIDIA-RT."
+				return m, nil
+			}
 			return m, m.start(translate)
 		case "c":
 			if m.cancelRun == nil {
@@ -436,6 +443,10 @@ func (m *model) forkMenuKey(key string) tea.Cmd {
 		case "enter":
 			if m.forkIndex < len(m.cfg.forks) {
 				m.applyFork(m.cfg.forks[m.forkIndex])
+				if m.cfg.forkName == nvidiaRTForkName {
+					return tea.Batch(m.checkUpstream(), nextUpstreamCheck())
+				}
+				return m.checkUpstream()
 			} else {
 				m.pickingPath, m.forkError = true, ""
 				return chooseFork(m.ctx, forkBuild{}, m.cfg.dir, m.cfg.forks)
@@ -722,6 +733,9 @@ func (m *model) upstreamStatus() string {
 	case m.upstreamErr != nil:
 		return warning.Render("Check failed · " + m.upstreamErr.Error())
 	case m.upstream.sha == "":
+		if m.upstream.releaseOnly && m.upstream.release != "" {
+			return "Latest published build · " + m.upstream.release
+		}
 		return "U to check GitHub"
 	case strings.HasPrefix(m.upstream.checkout, "Upstream commit"):
 		return warning.Render(m.upstream.checkout)
@@ -735,6 +749,27 @@ func (m *model) upstreamRows(width int) []string {
 	rows := []string{m.upstreamStatus()}
 	if u.repository != "" {
 		rows = append(rows, u.repository)
+	}
+	if u.releaseOnly {
+		if u.release != "" {
+			rows = append(rows, "Latest published build · "+u.release)
+		}
+		if u.releaseErr != nil {
+			rows = append(rows, "Release check failed · "+u.releaseErr.Error())
+		}
+		if !u.publishedAt.IsZero() {
+			rows = append(rows, "Published · "+u.publishedAt.Local().Format("2006-01-02 15:04 MST"))
+		}
+		if u.assetCount > 0 {
+			rows = append(rows, fmt.Sprintf("Release assets · %d", u.assetCount))
+		}
+		if !u.checkedAt.IsZero() {
+			rows = append(rows, "Last successful check · "+u.checkedAt.Local().Format("15:04 MST"))
+		}
+		if m.cfg.checkUpdates || m.cfg.forkName == nvidiaRTForkName {
+			return append(rows, "Automatic · every 15 min")
+		}
+		return append(rows, "Manual · U to refresh")
 	}
 	if u.sha != "" {
 		branch := u.branch

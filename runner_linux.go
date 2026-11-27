@@ -36,6 +36,15 @@ func commandFor(cfg config, op operation) (*exec.Cmd, error) {
 	wineArgs := []string{cfg.binary}
 	switch op {
 	case play:
+		if cfg.forkName == nvidiaRTForkName {
+			if cfg.seriesS {
+				wineArgs = append(wineArgs, "play", "--series-s")
+			} else {
+				wineArgs = append(wineArgs, "play")
+			}
+			wineArgs = append(wineArgs, nvidiaRTLaunchArgs()...)
+			break
+		}
 		title, err := winePath(cfg.title)
 		if err != nil {
 			return nil, err
@@ -46,6 +55,9 @@ func commandFor(cfg config, op operation) (*exec.Cmd, error) {
 		}
 		wineArgs = append(wineArgs, "run", title, "--execute", "--console", console)
 	case translate:
+		if cfg.forkName == nvidiaRTForkName {
+			return nil, errors.New("VIctory NVIDIA-RT does not provide the translate command")
+		}
 		shaders, err := regularFile(filepath.Join(filepath.Dir(cfg.title), "shaders.rpf"))
 		if err != nil {
 			return nil, fmt.Errorf("shader archive: %w", err)
@@ -60,11 +72,45 @@ func commandFor(cfg config, op operation) (*exec.Cmd, error) {
 	}
 	cmd := exec.Command(cfg.wine, wineArgs...)
 	if op == play && cfg.gamescope {
-		args := append(cfg.display.gamescopeArgs(), "--", cfg.wine)
+		displayArgs := cfg.display.gamescopeArgs()
+		if cfg.forkName == nvidiaRTForkName {
+			// This fork uses DLSS itself; avoid stacking Gamescope FSR on top.
+			displayArgs = cfg.display.gamescopeArgsWithoutFSR()
+		}
+		args := append(displayArgs, "--", cfg.wine)
 		cmd = exec.Command("gamescope", append(args, wineArgs...)...)
 	}
 	cmd.Dir = cfg.dir
+	if op == play && cfg.forkName == nvidiaRTForkName {
+		cmd.Dir = filepath.Dir(cfg.title)
+	}
 	return cmd, nil
+}
+
+// The release's PLAY.cmd uses these same fast-path settings by default. Keep
+// them in PX so its normal run/stop and Gamescope controls still apply.
+func nvidiaRTLaunchArgs() []string {
+	return []string{
+		"--res", "1440", "--dlss", "quality", "--fps", "1000",
+		"--set", "VICTORY_HDR=0", "--set", "VICTORY_REFLEX=boost",
+		"--set", "VICTORY_FULLSCREEN=1", "--set", "VICTORY_PIPELINE_SAMPLER_TABLE=1",
+		"--set", "VICTORY_PIPELINE_WAIT_ONCE=1", "--set", "VICTORY_PIPELINE_WAIT_BACKLOG=64",
+		"--set", "VICTORY_PIPELINE_SLOW_WORKERS=8", "--set", "VICTORY_TEXTURE_LOOK_ONCE=1",
+		"--set", "VICTORY_TEXTURE_READ_AHEAD=1", "--set", "VICTORY_STAGING_NO_ZERO=1",
+		"--set", "VICTORY_SEND_COPIED_FIND=1", "--set", "VICTORY_FILES_BUFFERED=1",
+		"--set", "VICTORY_MEMORY_FRESH=1", "--set", "VICTORY_MEMORY_ARENAS_AHEAD=1",
+		"--set", "VICTORY_MEMORY_QUIET=1", "--set", "VICTORY_MEMORY_LAND_SENT=1",
+		"--set", "VICTORY_MEMORY_ASK_RUNS=1", "--set", "VICTORY_MEMORY_LEAN=1",
+		"--set", "VICTORY_MEMORY_DIRTY=1", "--set", "VICTORY_MEMORY_BUFFER_FAULTS=1",
+		"--set", "VICTORY_MEMORY_FAULT_PAGES=40000", "--set", "VICTORY_REFRESH_PROBE_US=300",
+		"--set", "VICTORY_DECLARE_ACROSS_LISTS=1", "--set", "VICTORY_REFRESH_PROBE_TEXTURES=1",
+		"--set", "VICTORY_REFRESH_SPLIT=1", "--set", "VICTORY_WAIT_SPLIT=1",
+		"--set", "VICTORY_DSTORAGE_STATS=1", "--set", "VICTORY_PIPELINE_PIECES=1",
+		"--set", "VICTORY_PIPELINE_PIECES_REFUSE_UNTRANSLATED=1",
+		"--set", "VICTORY_PIPELINE_PIECES_ONLY=graphics", "--set", "VICTORY_REFRESH_SET=1",
+		"--set", "VICTORY_TITLE_WRITE_RANGE=1", "--set", "VICTORY_UNDER_PARTS=1",
+		"--set", "VICTORY_SEND_THREAD=1",
+	}
 }
 
 func runProcess(ctx context.Context, cmd *exec.Cmd, raw io.Writer, events chan<- tea.Msg) (result processFinished) {

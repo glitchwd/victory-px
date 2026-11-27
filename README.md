@@ -95,6 +95,27 @@ depend on the build's output format. The GitHub update check uses the selected
 build's local Git origin and active branch. For a build without a Git checkout,
 the update status is unavailable.
 
+### VIctory-NVIDIA-RT
+
+Register the release executable as the `nvidia-rt` build from **B Forks** (or
+with `--save-fork nvidia-rt --victory-dir DIR --victory-bin FILE`). PX uses the
+fork's `play` command and its published fast-path settings, while keeping the
+normal run/stop controls and optional Gamescope session. It starts the Series X
+profile by default; press **C** to use Series S. **T Translate** is unavailable
+for this build.
+
+`./launch-nvidia-rt.sh` opens PX with this build selected and the existing
+GE-Proton prefix. It does not start the game: **U** refreshes the release
+monitor immediately, and **S** starts the session when you are ready.
+
+With `nvidia-rt` selected, PX checks
+[Kemerd/VIctory-NVIDIA-RT](https://github.com/Kemerd/VIctory-NVIDIA-RT/releases)
+on startup and every 15 minutes. It reports the newest published release,
+including prereleases, in PortWatch; **U** refreshes it immediately. The
+release page can change independently of the installed executable, so PX
+reports the upstream version and publication time rather than claiming the
+local binary is current.
+
 When sharing a result, include the build or commit, Wine version, GPU, and
 Gamescope preset (or Wine direct).
 

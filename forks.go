@@ -12,6 +12,11 @@ import (
 
 var forkNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,39}$`)
 
+const (
+	nvidiaRTForkName = "nvidia-rt"
+	nvidiaRTRepo     = "Kemerd/VIctory-NVIDIA-RT"
+)
+
 type forkBuild struct {
 	Name   string `json:"-"`
 	Dir    string `json:"directory"`
@@ -22,7 +27,17 @@ func (build forkBuild) label() string {
 	if build.Name == "" {
 		return "Command line"
 	}
+	if build.Name == nvidiaRTForkName {
+		return "VIctory NVIDIA-RT"
+	}
 	return build.Name
+}
+
+func (build forkBuild) releaseRepository() string {
+	if build.Name == nvidiaRTForkName {
+		return nvidiaRTRepo
+	}
+	return ""
 }
 
 func (cfg *config) selectFork(build forkBuild) error {
