@@ -1,5 +1,7 @@
 # victory-px
 
+![Victory PX terminal monitor showing system diagnostics, performance history and session logs](victory-px-monitor.png)
+
 Victory-PX is an experimental Linux launcher for comparing how VIctory builds
 run under Wine, with or without Gamescope. It started as a tool for personal
 compatibility tests. You can start a session, watch frame rate and GPU usage,
