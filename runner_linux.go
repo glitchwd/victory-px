@@ -283,8 +283,71 @@ func suppressGnomeAliveDialog() func() {
 	}
 }
 
+// suppressKdeAliveDialog temporarily disables KDE KWin's "Application Not Responding"
+// dialog while gamescope is loading/running, returning a restore function.
+func suppressKdeAliveDialog() func() {
+	if !strings.Contains(strings.ToUpper(os.Getenv("XDG_CURRENT_DESKTOP")), "KDE") {
+		return func() {}
+	}
+	readBin := firstInPath("kreadconfig6", "kreadconfig5")
+	writeBin := firstInPath("kwriteconfig6", "kwriteconfig5")
+	qdbusBin := firstInPath("qdbus6", "qdbus-qt6", "qdbus")
+	if readBin == "" || writeBin == "" || qdbusBin == "" {
+		return func() {}
+	}
+	out, err := exec.Command(readBin, "--file", "kwinrc", "--group", "Windows", "--key", "KillPingTimeout").Output()
+	if err != nil {
+		return func() {}
+	}
+	prev := strings.TrimSpace(string(out))
+	if prev == "0" {
+		return func() {}
+	}
+	if err := exec.Command(writeBin, "--file", "kwinrc", "--group", "Windows", "--key", "KillPingTimeout", "0").Run(); err != nil {
+		return func() {}
+	}
+	_ = exec.Command(qdbusBin, "org.kde.KWin", "/KWin", "reconfigure").Run()
+	return func() {
+		if prev == "" {
+			_ = exec.Command(writeBin, "--file", "kwinrc", "--group", "Windows", "--key", "KillPingTimeout", "--delete").Run()
+		} else {
+			_ = exec.Command(writeBin, "--file", "kwinrc", "--group", "Windows", "--key", "KillPingTimeout", prev).Run()
+		}
+		_ = exec.Command(qdbusBin, "org.kde.KWin", "/KWin", "reconfigure").Run()
+	}
+}
+
+// inhibitIdleSleep (experimental) holds a systemd-inhibit lock for idle:sleep
+// while gamescope is running so controller-only sessions do not blank or suspend.
+func inhibitIdleSleep() func() {
+	if _, err := exec.LookPath("systemd-inhibit"); err != nil {
+		return func() {}
+	}
+	cmd := exec.Command("systemd-inhibit", "--what=idle:sleep", "--who=victory-px", "--why=Gamescope session active", "--mode=block", "sleep", "infinity")
+	if err := cmd.Start(); err != nil {
+		return func() {}
+	}
+	return func() {
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		}
+	}
+}
+
+func firstInPath(names ...string) string {
+	for _, name := range names {
+		if p, err := exec.LookPath(name); err == nil {
+			return p
+		}
+	}
+	return ""
+}
+
 func launch(ctx context.Context, cfg config, op operation, events chan<- tea.Msg) processFinished {
 	defer suppressGnomeAliveDialog()()
+	defer suppressKdeAliveDialog()()
+	defer inhibitIdleSleep()()
 	cmd, err := commandFor(cfg, op)
 	if err != nil {
 		return processFinished{err: err}
