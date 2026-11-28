@@ -618,6 +618,28 @@ fn run_event_loop(
                     if key.kind != KeyEventKind::Press {
                         continue;
                     }
+                    if key.modifiers == KeyModifiers::CONTROL
+                        && matches!(key.code, KeyCode::Char('k' | 'K'))
+                    {
+                        if app.running {
+                            app.modal = ModalKind::PanicButton;
+                            app.status_text = "PANIC BUTTON TRIGGERED".into();
+                            app.notice =
+                                "PANIC BUTTON TRIGGERED (Ctrl+K) — terminating game…".into();
+                            let _ = terminal.draw(|f| ui::draw(f, &app, false, false));
+                            if let Some(mut session) = child.take() {
+                                session.stop()?;
+                            }
+                            finished_duration = started_at.map(|t| t.elapsed());
+                            app.elapsed_secs = finished_duration.map_or(0, |d| d.as_secs());
+                            app.running = false;
+                            app.notice =
+                                "PANIC BUTTON TRIGGERED (Ctrl+K) — game terminated.".into();
+                        } else {
+                            app.notice = "PANIC BUTTON (Ctrl+K): no active game session.".into();
+                        }
+                        continue;
+                    }
                     if is_quit(key, app.modal) {
                         if let Some(mut session) = child.take() {
                             session.stop()?;
@@ -648,6 +670,12 @@ fn run_event_loop(
                         .modifiers
                         .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
                     {
+                        continue;
+                    }
+                    if app.modal == ModalKind::PanicButton {
+                        if matches!(key.code, KeyCode::Esc | KeyCode::Enter) {
+                            app.modal = ModalKind::None;
+                        }
                         continue;
                     }
                     if app.modal == ModalKind::ErrorAdvisory {

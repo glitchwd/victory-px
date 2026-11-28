@@ -54,7 +54,7 @@ Outputs a Lighthouse HTML report (`lighthouse-*.html`) and a Markdown bundle (`r
 | `G` | Open **Gamescope** quick config modal |
 | `C` | Toggle console profile (`Series X` / `Series S`) |
 | `S` | Start or stop the active session |
-| `R` / `W` | Export **Lighthouse HTML** / **Markdown Report** (attaches in-game screenshot when available) |
+| `R` / `W` | Export **Lighthouse HTML** / **Markdown Report** (attaches in-game screenshot; on Wayland requires `grim`, `spectacle`, or `gnome-screenshot`) |
 | `↑` / `↓`, `Enter`, `Del` | Navigate, open, or delete **Saved Reports** (and attached screenshot) in **Lighthouse** |
 | `T` | Open **Theme & Logo FX** modal |
 | `X` / `V` | Open highlighted fork folder / game folder in file manager |

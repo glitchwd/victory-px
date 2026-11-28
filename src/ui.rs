@@ -31,6 +31,7 @@ pub enum ModalKind {
     ForkWizardName,
     ThemeFX,
     ErrorAdvisory,
+    PanicButton,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -439,6 +440,7 @@ pub fn draw(f: &mut Frame, app: &AppState, can_preview: bool, show_paths: bool) 
         ModalKind::ForkWizardName => draw_fork_name_modal(f, area, app),
         ModalKind::ThemeFX => draw_theme_modal(f, area, app),
         ModalKind::ErrorAdvisory => draw_error_advisory_modal(f, area, app),
+        ModalKind::PanicButton => draw_panic_modal(f, area, app),
     }
 }
 
@@ -2287,6 +2289,53 @@ fn draw_error_advisory_modal(f: &mut Frame, area: Rect, app: &AppState) {
         Paragraph::new(lines).wrap(Wrap { trim: false }).block(block),
         popup,
     );
+}
+
+fn draw_panic_modal(f: &mut Frame, area: Rect, app: &AppState) {
+    let w = area.width.min(62).max(36);
+    let h = area.height.min(11).max(7);
+    let rect = Rect {
+        x: area.x + (area.width.saturating_sub(w)) / 2,
+        y: area.y + (area.height.saturating_sub(h)) / 2,
+        width: w,
+        height: h,
+    };
+    f.render_widget(Clear, rect);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Double)
+        .border_style(Style::default().fg(RED).add_modifier(Modifier::BOLD))
+        .style(Style::default().bg(BG_PANEL))
+        .title(Span::styled(
+            " ⚠ PANIC BUTTON TRIGGERED ",
+            Style::default()
+                .bg(RED)
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ));
+    let state_line = if app.running {
+        "Terminating active game session…"
+    } else {
+        "Active game session terminated."
+    };
+    let lines = vec![
+        Line::from(""),
+        Line::from(Span::styled(
+            "  PANIC BUTTON (Ctrl+K)",
+            Style::default().fg(RED).add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            format!("  {state_line}"),
+            Style::default().fg(TEXT_MAIN).add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  Press [Enter] or [Esc] to close this dialog",
+            Style::default().fg(TEXT_MUTED),
+        )),
+    ];
+    f.render_widget(Paragraph::new(lines).block(block), rect);
 }
 
 #[cfg(test)]
