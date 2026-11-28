@@ -17,6 +17,8 @@ const (
 	nvidiaRepo       = "trustno1-coder/VIctory-NVIDIA"
 	nvidiaRTForkName = "nvidia-rt"
 	nvidiaRTRepo     = "Kemerd/VIctory-NVIDIA-RT"
+	vilocityForkName = "vilocity"
+	vilocityRepo     = "voidopcode/vilocity"
 )
 
 type forkBuild struct {
@@ -34,6 +36,8 @@ func (build forkBuild) label() string {
 		return "VIctory NVIDIA"
 	case nvidiaRTForkName:
 		return "VIctory NVIDIA-RT"
+	case vilocityForkName:
+		return "Vilocity"
 	default:
 		return build.Name
 	}
@@ -45,6 +49,8 @@ func (build forkBuild) releaseRepository() string {
 		return nvidiaRepo
 	case nvidiaRTForkName:
 		return nvidiaRTRepo
+	case vilocityForkName:
+		return vilocityRepo
 	default:
 		return ""
 	}
