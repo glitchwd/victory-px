@@ -1,6 +1,5 @@
 use std::fs;
 use std::io::Read;
-use std::os::fd::AsRawFd;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -163,15 +162,11 @@ fn nvidia_query(query: &str) -> Option<String> {
         .stderr(Stdio::null())
         .spawn()
         .ok()?;
-    let deadline = Instant::now() + Duration::from_millis(750);
+    let deadline = Instant::now() + Duration::from_millis(3000);
     loop {
         match child.try_wait() {
             Ok(Some(status)) if status.success() => {
                 let stdout = child.stdout.take()?;
-                if unsafe { libc::fcntl(stdout.as_raw_fd(), libc::F_SETFL, libc::O_NONBLOCK) } == -1
-                {
-                    return None;
-                }
                 let mut text = String::new();
                 stdout.take(4096).read_to_string(&mut text).ok()?;
                 return Some(text);

@@ -33,7 +33,7 @@ pub enum ModalKind {
     ErrorAdvisory,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ThemePalette {
     ViceCity,
     CyberNeon,
@@ -94,7 +94,7 @@ impl ThemePalette {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AnimMode {
     Wave,
     Pulse,

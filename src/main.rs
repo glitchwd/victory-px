@@ -162,6 +162,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let host_info = probe_host_info();
     let host_metrics = sample_host_metrics(host_info.has_nvidia_smi);
 
+    let theme = load_theme_prefs();
     let mut app = AppState {
         tab: if active_idx.is_none() || game_exe.is_empty() {
             ActiveTab::Forks
@@ -169,9 +170,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ActiveTab::Monitor
         },
         modal: ModalKind::None,
-        palette: ThemePalette::ViceCity,
-        anim_mode: AnimMode::Static,
-        anim_speed: 1,
+        palette: theme.palette,
+        anim_mode: theme.anim_mode,
+        anim_speed: theme.anim_speed,
         anim_tick: 0,
         show_error_popups: true,
         advisory_shown_this_run: false,
@@ -668,12 +669,15 @@ fn run_event_loop(
                             }
                             KeyCode::Char('p') | KeyCode::Char('P') => {
                                 app.palette = app.palette.next();
+                                save_theme_prefs(&app);
                             }
                             KeyCode::Char('a') | KeyCode::Char('A') => {
                                 app.anim_mode = app.anim_mode.next();
+                                save_theme_prefs(&app);
                             }
                             KeyCode::Char('v') | KeyCode::Char('V') => {
                                 app.anim_speed = (app.anim_speed + 1) % 3;
+                                save_theme_prefs(&app);
                             }
                             KeyCode::Char('e') | KeyCode::Char('E') => {
                                 app.show_error_popups = !app.show_error_popups;
@@ -1162,5 +1166,65 @@ mod tests {
             key('q', KeyModifiers::NONE),
             ModalKind::ForkWizardName
         ));
+    }
+}
+
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+struct ThemePrefs {
+    palette: ThemePalette,
+    anim_mode: AnimMode,
+    anim_speed: u8,
+}
+
+impl Default for ThemePrefs {
+    fn default() -> Self {
+        Self {
+            palette: ThemePalette::ViceCity,
+            anim_mode: AnimMode::Static,
+            anim_speed: 1,
+        }
+    }
+}
+
+fn theme_prefs_path() -> Option<std::path::PathBuf> {
+    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
+        if !xdg.trim().is_empty() {
+            return Some(std::path::PathBuf::from(xdg).join("victory-px").join("theme.json"));
+        }
+    }
+    std::env::var_os("HOME").map(|h| {
+        std::path::PathBuf::from(h)
+            .join(".config")
+            .join("victory-px")
+            .join("theme.json")
+    })
+}
+
+fn load_theme_prefs() -> ThemePrefs {
+    let Some(path) = theme_prefs_path() else {
+        return ThemePrefs::default();
+    };
+    let Ok(raw) = std::fs::read_to_string(path) else {
+        return ThemePrefs::default();
+    };
+    serde_json::from_str(&raw).unwrap_or_default()
+}
+
+fn save_theme_prefs(app: &AppState) {
+    let Some(path) = theme_prefs_path() else {
+        return;
+    };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let prefs = ThemePrefs {
+        palette: app.palette,
+        anim_mode: app.anim_mode,
+        anim_speed: app.anim_speed,
+    };
+    if let Ok(json) = serde_json::to_string_pretty(&prefs) {
+        let _ = std::fs::write(path, json);
     }
 }
