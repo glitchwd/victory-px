@@ -39,7 +39,7 @@ cargo build --release --locked
 ./target/release/victory-px --fork my-fork --exe /path/to/title.exe --bench --duration 30
 ```
 
-Outputs a Lighthouse HTML report (`lighthouse-*.html`) and a Markdown bundle (`corpus-*.md`) under `${XDG_STATE_HOME:-~/.local/state}/victory-px/reports/`.
+Outputs a Lighthouse HTML report (`lighthouse-*.html`) and a Markdown bundle (`report-*.md`) under `${XDG_STATE_HOME:-~/.local/state}/victory-px/reports/`.
 
 ---
 
@@ -54,7 +54,8 @@ Outputs a Lighthouse HTML report (`lighthouse-*.html`) and a Markdown bundle (`c
 | `G` | Open **Gamescope** quick config modal |
 | `C` | Toggle console profile (`Series X` / `Series S`) |
 | `S` | Start or stop the active session |
-| `R` / `W` | Export **Lighthouse HTML** / **Markdown Report** |
+| `R` / `W` | Export **Lighthouse HTML** / **Markdown Report** (attaches in-game screenshot when available) |
+| `↑` / `↓`, `Enter`, `Del` | Navigate, open, or delete **Saved Reports** (and attached screenshot) in **Lighthouse** |
 | `T` | Open **Theme & Logo FX** modal |
 | `X` / `V` | Open highlighted fork folder / game folder in file manager |
 | `Q` / `Ctrl+C` | Stop session and quit (`Ctrl+C` works while typing a profile name) |

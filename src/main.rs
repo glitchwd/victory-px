@@ -1,4 +1,4 @@
-mod corpus;
+mod report;
 mod forks;
 mod guard;
 mod metrics;
@@ -8,9 +8,9 @@ mod system;
 mod ui;
 
 use clap::Parser;
-use corpus::{
-    build_corpus_bundle, build_lighthouse_html, write_report_file, write_report_with_ext,
-    CorpusMeta,
+use report::{
+    build_markdown_report, build_lighthouse_html, write_report_file, write_report_with_ext,
+    ReportMeta,
 };
 use crossterm::event::{
     self, DisableFocusChange, DisableMouseCapture, EnableFocusChange, EnableMouseCapture, Event,
@@ -202,6 +202,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         logs: Vec::new(),
         log_filter: LogFilter::All,
         log_scroll: 0,
+        saved_reports: report::list_reports(),
+        selected_report: 0,
     };
 
     let interrupted = Arc::new(AtomicBool::new(false));
@@ -385,7 +387,7 @@ fn run_headless_bench(
     }
     app.host_metrics = sample_host_metrics(app.host_info.has_nvidia_smi);
 
-    let meta = CorpusMeta {
+    let meta = ReportMeta {
         fork_name: &b.name,
         host_metrics: &app.host_metrics,
         series_s: app.series_s,
@@ -396,9 +398,9 @@ fn run_headless_bench(
     };
     let html = build_lighthouse_html(&app.stats, &meta);
     let html_path = write_report_with_ext("lighthouse", "html", &html)?;
-    let corpus = build_corpus_bundle(&app.stats, &meta);
-    let md_path = write_report_file("report", &corpus)?;
-    let scores = corpus::compute_lighthouse_scores(
+    let md_report = build_markdown_report(&app.stats, &meta);
+    let md_path = write_report_file("report", &md_report)?;
+    let scores = report::compute_lighthouse_scores(
         &app.stats,
         true,
         app.series_s,
@@ -1019,7 +1021,7 @@ fn run_event_loop(
                                         (name.as_str(), *series, *scope, display)
                                     },
                                 );
-                            let meta = CorpusMeta {
+                            let meta = ReportMeta {
                                 fork_name,
                                 series_s,
                                 gamescope,
@@ -1030,15 +1032,34 @@ fn run_event_loop(
                                 state_label: &app.status_text,
                             };
                             let html = build_lighthouse_html(&app.stats, &meta);
-                            match write_report_with_ext("lighthouse", "html", &html) {
-                                Ok(p) => {
+                            match report::write_report_with_screenshot(
+                                "lighthouse",
+                                "html",
+                                true,
+                                |shot| match shot {
+                                    Some(name) => html.replace(
+                                        "</body>",
+                                        &format!(
+                                            "<section class=\"card\"><h2>In-game Screenshot</h2><img src=\"{name}\" alt=\"In-game screenshot\" style=\"max-width:100%;border-radius:8px;border:1px solid #334155;\"></section></body>"
+                                        ),
+                                    ),
+                                    None => html,
+                                },
+                            ) {
+                                Ok((p, shot)) => {
+                                    app.refresh_reports();
+                                    let shot_msg = if shot.is_some() {
+                                        " (+screenshot)"
+                                    } else {
+                                        ""
+                                    };
                                     app.notice = match open_in_os(
                                         &p,
                                         "Lighthouse report",
                                         open_tx.clone(),
                                     ) {
-                                        Ok(()) => "Saved Lighthouse report; opening…".into(),
-                                        Err(error) => format!("Saved Lighthouse report. {error}"),
+                                        Ok(()) => format!("Saved Lighthouse report{shot_msg}; opening…"),
+                                        Err(error) => format!("Saved Lighthouse report{shot_msg}. {error}"),
                                     };
                                 }
                                 Err(e) => app.notice = format!("Lighthouse export failed: {e}"),
@@ -1054,7 +1075,7 @@ fn run_event_loop(
                                         (name.as_str(), *series, *scope, display)
                                     },
                                 );
-                            let meta = CorpusMeta {
+                            let meta = ReportMeta {
                                 fork_name,
                                 series_s,
                                 gamescope,
@@ -1064,15 +1085,66 @@ fn run_event_loop(
                                     .or_else(|| started_at.map(|t| t.elapsed())),
                                 state_label: &app.status_text,
                             };
-                            let bundle = build_corpus_bundle(&app.stats, &meta);
-                            match write_report_file("report", &bundle) {
-                                Ok(p) => {
+                            let bundle = build_markdown_report(&app.stats, &meta);
+                            match report::write_report_with_screenshot(
+                                "report",
+                                "md",
+                                true,
+                                |shot| match shot {
+                                    Some(name) => format!(
+                                        "{bundle}\n\n### In-game Screenshot\n\n![In-game screenshot]({name})\n"
+                                    ),
+                                    None => bundle,
+                                },
+                            ) {
+                                Ok((p, shot)) => {
+                                    app.refresh_reports();
+                                    let shot_msg = if shot.is_some() {
+                                        " (+screenshot)"
+                                    } else {
+                                        ""
+                                    };
                                     app.notice = format!(
-                                        "Saved {}",
+                                        "Saved {}{shot_msg}",
                                         p.file_name().unwrap_or_default().to_string_lossy()
-                                    )
+                                    );
                                 }
                                 Err(e) => app.notice = format!("Report export failed: {e}"),
+                            }
+                        }
+                        KeyCode::Up if app.tab == ActiveTab::Lighthouse => {
+                            if app.selected_report > 0 {
+                                app.selected_report -= 1;
+                            }
+                        }
+                        KeyCode::Down if app.tab == ActiveTab::Lighthouse => {
+                            if app.selected_report + 1 < app.saved_reports.len() {
+                                app.selected_report += 1;
+                            }
+                        }
+                        KeyCode::Enter if app.tab == ActiveTab::Lighthouse => {
+                            if let Some(entry) = app.saved_reports.get(app.selected_report).cloned()
+                            {
+                                app.notice = match open_in_os(
+                                    &entry.path,
+                                    "Saved report",
+                                    open_tx.clone(),
+                                ) {
+                                    Ok(()) => format!("Opening {}…", entry.name),
+                                    Err(e) => format!("Open failed: {e}"),
+                                };
+                            }
+                        }
+                        KeyCode::Delete if app.tab == ActiveTab::Lighthouse => {
+                            if let Some(entry) = app.saved_reports.get(app.selected_report).cloned()
+                            {
+                                match report::delete_report(&entry) {
+                                    Ok(()) => {
+                                        app.refresh_reports();
+                                        app.notice = format!("Deleted {}", entry.name);
+                                    }
+                                    Err(e) => app.notice = format!("Delete failed: {e}"),
+                                }
                             }
                         }
                         _ => {}

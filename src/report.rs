@@ -8,7 +8,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 
-pub struct CorpusMeta<'a> {
+pub struct ReportMeta<'a> {
     pub fork_name: &'a str,
     pub host_metrics: &'a HostMetrics,
     pub series_s: bool,
@@ -27,14 +27,14 @@ fn public_fork(name: &str) -> &'static str {
     }
 }
 
-fn build_line(meta: &CorpusMeta<'_>) -> &'static str {
+fn build_line(meta: &ReportMeta<'_>) -> &'static str {
     match public_fork(meta.fork_name) {
         NVIDIA_FORK | NVIDIA_RT_FORK => "NVIDIA",
         _ => gpu_vendor(meta),
     }
 }
 
-fn gpu_vendor(meta: &CorpusMeta<'_>) -> &'static str {
+fn gpu_vendor(meta: &ReportMeta<'_>) -> &'static str {
     match meta.host_metrics.gpu_vendor {
         "AMD" => "AMD",
         "NVIDIA" => "NVIDIA",
@@ -58,7 +58,7 @@ fn memory(value: Option<u64>) -> String {
         .unwrap_or_else(|| "not recorded".into())
 }
 
-pub fn build_corpus_bundle(stats: &RunStats, meta: &CorpusMeta<'_>) -> String {
+pub fn build_markdown_report(stats: &RunStats, meta: &ReportMeta<'_>) -> String {
     let build_line = build_line(meta);
     let fork = public_fork(meta.fork_name);
     let console = if meta.series_s {
@@ -200,11 +200,116 @@ pub fn build_corpus_bundle(stats: &RunStats, meta: &CorpusMeta<'_>) -> String {
     )
 }
 
+#[derive(Debug, Clone)]
+pub struct ReportEntry {
+    pub path: PathBuf,
+    pub name: String,
+    pub screenshot: Option<PathBuf>,
+    pub size_bytes: u64,
+}
+
+pub fn list_reports() -> Vec<ReportEntry> {
+    let Some(root) = state_root() else {
+        return Vec::new();
+    };
+    let dir = root.join("reports");
+    let Ok(entries) = fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut reports = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if ext != "html" && ext != "md" {
+            continue;
+        }
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("report")
+            .to_string();
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        let png_path = dir.join(format!("{stem}.png"));
+        let screenshot = if png_path.is_file() {
+            Some(png_path)
+        } else {
+            None
+        };
+        let size_bytes = entry.metadata().map(|m| m.len()).unwrap_or(0);
+        reports.push(ReportEntry {
+            path,
+            name,
+            screenshot,
+            size_bytes,
+        });
+    }
+    reports.sort_by(|a, b| b.name.cmp(&a.name));
+    reports
+}
+
+pub fn delete_report(entry: &ReportEntry) -> Result<(), String> {
+    if let Err(e) = fs::remove_file(&entry.path) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            return Err(e.to_string());
+        }
+    }
+    if let Some(ref shot) = entry.screenshot {
+        if let Err(e) = fs::remove_file(shot) {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                return Err(e.to_string());
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn capture_screenshot(dir: &std::path::Path, stem: &str) -> Option<PathBuf> {
+    let out = dir.join(format!("{stem}.png"));
+    let out_str = out.to_str()?;
+    let candidates: &[(&str, &[&str])] = &[
+        ("grim", &[out_str]),
+        ("spectacle", &["-b", "-n", "-o", out_str]),
+        ("gnome-screenshot", &["-f", out_str]),
+        ("import", &["-window", "root", out_str]),
+    ];
+    for (bin, args) in candidates {
+        let ok = std::process::Command::new(bin)
+            .args(*args)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if ok && out.metadata().map(|m| m.len() > 0).unwrap_or(false) {
+            return Some(out);
+        }
+        let _ = fs::remove_file(&out);
+    }
+    None
+}
+
 pub fn write_report_file(prefix: &str, content: &str) -> Result<PathBuf, String> {
     write_report_with_ext(prefix, "md", content)
 }
 
 pub fn write_report_with_ext(prefix: &str, ext: &str, content: &str) -> Result<PathBuf, String> {
+    let (path, _) = write_report_with_screenshot(prefix, ext, false, |_| content.to_string())?;
+    Ok(path)
+}
+
+pub fn write_report_with_screenshot(
+    prefix: &str,
+    ext: &str,
+    take_screenshot: bool,
+    render: impl FnOnce(Option<&str>) -> String,
+) -> Result<(PathBuf, Option<PathBuf>), String> {
     let root = state_root().ok_or("cannot resolve state directory")?;
     let dir = root.join("reports");
     private_files::directory(&root).map_err(|e| e.to_string())?;
@@ -212,12 +317,27 @@ pub fn write_report_with_ext(prefix: &str, ext: &str, content: &str) -> Result<P
     let ts = Utc::now().format("%Y%m%d-%H%M%S");
     let (path, mut file) = private_files::unique_file(&dir, &format!("{prefix}-{ts}"), ext)
         .map_err(|e| e.to_string())?;
+    let screenshot = if take_screenshot {
+        path.file_stem()
+            .and_then(|s| s.to_str())
+            .and_then(|stem| capture_screenshot(&dir, stem))
+    } else {
+        None
+    };
+    let shot_name = screenshot
+        .as_ref()
+        .and_then(|p| p.file_name())
+        .and_then(|n| n.to_str());
+    let content = render(shot_name);
     use std::io::Write;
     if let Err(error) = file.write_all(content.as_bytes()) {
         let _ = fs::remove_file(&path);
+        if let Some(ref s) = screenshot {
+            let _ = fs::remove_file(s);
+        }
         return Err(error.to_string());
     }
-    Ok(path)
+    Ok((path, screenshot))
 }
 
 fn score_color(score: u32) -> &'static str {
@@ -294,7 +414,7 @@ pub fn compute_lighthouse_scores(
     }
 }
 
-pub fn build_lighthouse_html(stats: &RunStats, meta: &CorpusMeta<'_>) -> String {
+pub fn build_lighthouse_html(stats: &RunStats, meta: &ReportMeta<'_>) -> String {
     let build_line = build_line(meta);
     let fork = public_fork(meta.fork_name);
     let numeric = |measurement: Option<f64>, digits| {
@@ -428,7 +548,7 @@ mod tests {
             gpu_vendor: "unexpected vendor",
             ..Default::default()
         };
-        let meta = CorpusMeta {
+        let meta = ReportMeta {
             fork_name: "custom & private label",
             host_metrics: &metrics,
             series_s: false,
@@ -439,7 +559,7 @@ mod tests {
         };
         let stats = RunStats::default();
         for report in [
-            build_corpus_bundle(&stats, &meta),
+            build_markdown_report(&stats, &meta),
             build_lighthouse_html(&stats, &meta),
         ] {
             for private in [meta.fork_name, meta.state_label, metrics.gpu_vendor] {

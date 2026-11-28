@@ -3,9 +3,9 @@ title: Reporting and benchmarks
 ---
 # Reporting and benchmarks
 
-- **3** opens the Lighthouse panel.
-- **R** saves `lighthouse-*.html` and asks `xdg-open` to display it.
-- **W** saves `corpus-*.md` with a short message and a full report outline.
+- **3** opens the Lighthouse panel, including the **Saved Reports** list (`↑`/`↓` to select, `Enter` to open, `Del` to delete a report and its attached screenshot).
+- **R** saves `lighthouse-*.html` (with an in-game screenshot `*.png` attached when available) and asks `xdg-open` to display it.
+- **W** saves `report-*.md` (with an in-game screenshot `*.png` attached when available) with a short message and a full report outline.
 
 Reports live in `${XDG_STATE_HOME:-~/.local/state}/victory-px/reports/`. New reports use mode `0600` and unique filenames. A missing desktop opener leaves the saved report available in this directory.
 

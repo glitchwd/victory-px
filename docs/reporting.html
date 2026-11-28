@@ -25,9 +25,9 @@
 
     <h2>Exports</h2>
     <ul>
-      <li><code>3</code> opens the Lighthouse panel.</li>
-      <li><code>R</code> saves <code>lighthouse-*.html</code> and asks <code>xdg-open</code> to display it.</li>
-      <li><code>W</code> saves <code>corpus-*.md</code> with a short message and a full report outline.</li>
+      <li><code>3</code> opens the Lighthouse panel, including the <strong>Saved Reports</strong> list (<code>&uarr;</code>/<code>&darr;</code> to select, <code>Enter</code> to open, <code>Del</code> to delete a report and its attached screenshot).</li>
+      <li><code>R</code> saves <code>lighthouse-*.html</code> (with an in-game screenshot <code>*.png</code> attached when available) and asks <code>xdg-open</code> to display it.</li>
+      <li><code>W</code> saves <code>report-*.md</code> (with an in-game screenshot <code>*.png</code> attached when available) with a short message and a full report outline.</li>
     </ul>
     <p>
       Reports live in <code>${XDG_STATE_HOME:-~/.local/state}/victory-px/reports/</code> with mode <code>0600</code> and unique filenames.

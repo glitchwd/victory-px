@@ -1,4 +1,4 @@
-use crate::corpus::compute_lighthouse_scores;
+use crate::report::compute_lighthouse_scores;
 use crate::forks::{ForkBuild, ForkTier};
 use crate::guard::{evaluate_guard, GuardFinding};
 use crate::metrics::{LogLine, RunStats, Severity};
@@ -312,9 +312,20 @@ pub struct AppState {
     pub logs: Vec<LogLine>,
     pub log_filter: LogFilter,
     pub log_scroll: usize,
+    pub saved_reports: Vec<crate::report::ReportEntry>,
+    pub selected_report: usize,
 }
 
 impl AppState {
+    pub fn refresh_reports(&mut self) {
+        self.saved_reports = crate::report::list_reports();
+        if self.saved_reports.is_empty() {
+            self.selected_report = 0;
+        } else if self.selected_report >= self.saved_reports.len() {
+            self.selected_report = self.saved_reports.len() - 1;
+        }
+    }
+
     pub fn active_fork(&self) -> Option<&ForkBuild> {
         self.active_fork_idx.and_then(|i| self.forks.get(i))
     }
@@ -1572,7 +1583,73 @@ fn draw_lighthouse(f: &mut Frame, area: Rect, app: &AppState) {
             ]));
         }
     }
-    f.render_widget(Paragraph::new(audits).block(audit_block), rows[2]);
+    let bottom_cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
+        .split(rows[2]);
+    f.render_widget(Paragraph::new(audits).block(audit_block), bottom_cols[0]);
+
+    let reports_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(BORDER_DIM))
+        .style(Style::default().bg(BG_PANEL))
+        .title(Span::styled(
+            format!(
+                " SAVED REPORTS ({}) [↑/↓ Enter Del] ",
+                app.saved_reports.len()
+            ),
+            Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
+        ));
+    let report_lines: Vec<Line> = if app.saved_reports.is_empty() {
+        vec![Line::from(Span::styled(
+            "  No saved reports yet. Press [R] (HTML) or [W] (MD).",
+            Style::default().fg(TEXT_MUTED),
+        ))]
+    } else {
+        let max_rows = bottom_cols[1].height.saturating_sub(2) as usize;
+        let start = if max_rows > 0 && app.selected_report >= max_rows {
+            app.selected_report - max_rows + 1
+        } else {
+            0
+        };
+        app.saved_reports
+            .iter()
+            .enumerate()
+            .skip(start)
+            .take(max_rows.max(1))
+            .map(|(idx, entry)| {
+                let selected = idx == app.selected_report;
+                let marker = if selected { "▶ " } else { "  " };
+                let shot_badge = if entry.screenshot.is_some() {
+                    " [IMG]"
+                } else {
+                    ""
+                };
+                let size_kb = (entry.size_bytes + 512) / 1024;
+                let style = if selected {
+                    Style::default()
+                        .fg(Color::Black)
+                        .bg(CYAN)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(TEXT_MAIN)
+                };
+                Line::from(vec![
+                    Span::styled(format!("{marker}{}", entry.name), style),
+                    Span::styled(
+                        format!("{shot_badge} ({size_kb}K)"),
+                        if selected {
+                            style
+                        } else {
+                            Style::default().fg(TEXT_MUTED)
+                        },
+                    ),
+                ])
+            })
+            .collect()
+    };
+    f.render_widget(Paragraph::new(report_lines).block(reports_block), bottom_cols[1]);
 }
 
 fn draw_forks_inventory(f: &mut Frame, area: Rect, app: &AppState) {
