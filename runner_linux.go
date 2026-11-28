@@ -256,7 +256,35 @@ func readOutput(reader io.Reader, savedLog io.Writer, events chan<- tea.Msg) (re
 	}
 }
 
+// suppressGnomeAliveDialog temporarily disables GNOME Mutter's "Force Quit / Wait"
+// unresponsive-window dialog while gamescope is loading/running, returning a
+// restore function that puts the original timeout back on exit.
+func suppressGnomeAliveDialog() func() {
+	if _, err := exec.LookPath("gsettings"); err != nil {
+		return func() {}
+	}
+	out, err := exec.Command("gsettings", "get", "org.gnome.mutter", "check-alive-timeout").Output()
+	if err != nil {
+		return func() {}
+	}
+	fields := strings.Fields(strings.TrimSpace(string(out)))
+	if len(fields) == 0 {
+		return func() {}
+	}
+	prev := fields[len(fields)-1]
+	if prev == "0" {
+		return func() {}
+	}
+	if err := exec.Command("gsettings", "set", "org.gnome.mutter", "check-alive-timeout", "0").Run(); err != nil {
+		return func() {}
+	}
+	return func() {
+		_ = exec.Command("gsettings", "set", "org.gnome.mutter", "check-alive-timeout", prev).Run()
+	}
+}
+
 func launch(ctx context.Context, cfg config, op operation, events chan<- tea.Msg) processFinished {
+	defer suppressGnomeAliveDialog()()
 	cmd, err := commandFor(cfg, op)
 	if err != nil {
 		return processFinished{err: err}

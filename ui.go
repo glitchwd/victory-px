@@ -423,6 +423,12 @@ func (m *model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.session.state = stopping
 			m.cancelRun()
+		case "ctrl+x", "X":
+			if m.cancelRun != nil {
+				m.session.state = stopping
+				m.notice = "PANIC: stopping session..."
+				m.cancelRun()
+			}
 		case "t":
 			if m.cfg.forkName == nvidiaRTForkName {
 				m.notice = "Shader translation is not available in VIctory NVIDIA-RT."
