@@ -80,6 +80,14 @@ func commandFor(cfg config, op operation) (*exec.Cmd, error) {
 		args := append(displayArgs, "--", cfg.wine)
 		cmd = exec.Command("gamescope", append(args, wineArgs...)...)
 	}
+	if op == play && cfg.gamemode {
+		if gm, err := exec.LookPath("gamemoderun"); err == nil {
+			cmd = exec.Command(gm, append([]string{cmd.Path}, cmd.Args[1:]...)...)
+		}
+	}
+	if op == play && cfg.dxvkAsync {
+		cmd.Env = append(os.Environ(), "DXVK_ASYNC=1", "DXVK_STATE_CACHE=1")
+	}
 	cmd.Dir = cfg.dir
 	if op == play && cfg.forkName == nvidiaRTForkName {
 		cmd.Dir = filepath.Dir(cfg.title)

@@ -28,6 +28,7 @@ type config struct {
 	forks                            []forkBuild
 	listForks                        bool
 	seriesS, gamescope, saveLog      bool
+	gamemode, dxvkAsync              bool
 	checkUpdates                     bool
 	display                          displayOptions
 }
@@ -55,6 +56,8 @@ func parseFlags(args []string, out io.Writer, getenv func(string) string) (confi
 	flags.StringVar(&cfg.runtimeLabel, "runtime-label", "", "Name of the selected Wine or Proton runtime for display")
 	flags.BoolVar(&cfg.seriesS, "series-s", false, "Use the Series S console profile")
 	flags.BoolVar(&cfg.gamescope, "gamescope", false, "Start the title inside Gamescope")
+	flags.BoolVar(&cfg.gamemode, "gamemode", false, "Wrap the session with gamemoderun")
+	flags.BoolVar(&cfg.dxvkAsync, "dxvk-async", false, "Enable DXVK_ASYNC=1 and DXVK_STATE_CACHE=1")
 	flags.StringVar(&preset, "display-preset", "small", "Gamescope preset: small, upscale or 1080p")
 	flags.StringVar(&gameSize, "game-size", "", "Override the Gamescope game resolution (WIDTHxHEIGHT)")
 	flags.StringVar(&windowSize, "window-size", "", "Override the Gamescope output size (WIDTHxHEIGHT)")

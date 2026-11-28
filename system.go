@@ -71,7 +71,7 @@ func sampleHost(ctx context.Context, nvidiaSMI string, delay time.Duration) tea.
 			metrics.ramUsedMiB, metrics.ramTotalMiB = parseRAM(string(data))
 		}
 		if nvidiaSMI != "" {
-			probe, cancel := context.WithTimeout(ctx, 850*time.Millisecond)
+			probe, cancel := context.WithTimeout(ctx, 3*time.Second)
 			defer cancel()
 			cmd := exec.CommandContext(probe, nvidiaSMI,
 				"--query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total",

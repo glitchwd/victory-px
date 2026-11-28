@@ -439,6 +439,24 @@ func (m *model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if m.cancelRun == nil {
 				m.cfg.seriesS = !m.cfg.seriesS
 			}
+		case "m":
+			if m.cancelRun == nil {
+				m.cfg.gamemode = !m.cfg.gamemode
+				if m.cfg.gamemode {
+					m.notice = "GameMode enabled (gamemoderun)."
+				} else {
+					m.notice = "GameMode disabled."
+				}
+			}
+		case "v":
+			if m.cancelRun == nil {
+				m.cfg.dxvkAsync = !m.cfg.dxvkAsync
+				if m.cfg.dxvkAsync {
+					m.notice = "DXVK async + state cache enabled."
+				} else {
+					m.notice = "DXVK async + state cache disabled."
+				}
+			}
 		case "g":
 			if m.cancelRun == nil {
 				switch {
