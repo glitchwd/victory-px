@@ -899,7 +899,7 @@ fn draw_sidebar(f: &mut Frame, area: Rect, app: &AppState) {
                 "[W] ",
                 Style::default().fg(AMBER).add_modifier(Modifier::BOLD),
             ),
-            Span::styled("Export Corpus MD", Style::default().fg(TEXT_MAIN)),
+            Span::styled("Export Report MD", Style::default().fg(TEXT_MAIN)),
         ]),
         Line::from(vec![
             Span::styled(
@@ -1806,7 +1806,7 @@ fn draw_bottom_bar(f: &mut Frame, area: Rect, app: &AppState) {
         )
     } else {
         Span::styled(
-            " [1] Monitor  [2] Display  [B] Loadout  [G] Gamescope  [O] Game Dir  [S] Run/Stop  [W] Corpus  [Q] Quit ",
+            " [1] Monitor  [2] Display  [B] Loadout  [G] Gamescope  [O] Game Dir  [S] Run/Stop  [W] Report  [Q] Quit ",
             Style::default().fg(TEXT_MAIN),
         )
     };

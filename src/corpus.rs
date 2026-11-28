@@ -139,7 +139,7 @@ pub fn build_corpus_bundle(stats: &RunStats, meta: &CorpusMeta<'_>) -> String {
         Not checked / unsure about: <caveats, e.g. single run only>\n\
         How to reproduce: launch via victory-px with {switches}\n\
         Next step or open question: <next check or open question>\n\
-        Attached: <corpus filename>\n"
+        Attached: <report filename>\n"
     );
     if short.chars().count() > 2000 {
         short = short.chars().take(1997).collect();

@@ -396,7 +396,7 @@ fn run_headless_bench(
     let html = build_lighthouse_html(&app.stats, &meta);
     let html_path = write_report_with_ext("lighthouse", "html", &html)?;
     let corpus = build_corpus_bundle(&app.stats, &meta);
-    let md_path = write_report_file("corpus", &corpus)?;
+    let md_path = write_report_file("report", &corpus)?;
     let scores = corpus::compute_lighthouse_scores(
         &app.stats,
         true,
@@ -443,7 +443,7 @@ fn run_headless_bench(
         html_path.file_name().unwrap_or_default().to_string_lossy()
     );
     println!(
-        "Corpus Markdown: {}",
+        "Report Markdown: {}",
         md_path.file_name().unwrap_or_default().to_string_lossy()
     );
     if cancelled {
@@ -1061,14 +1061,14 @@ fn run_event_loop(
                                 state_label: &app.status_text,
                             };
                             let bundle = build_corpus_bundle(&app.stats, &meta);
-                            match write_report_file("corpus", &bundle) {
+                            match write_report_file("report", &bundle) {
                                 Ok(p) => {
                                     app.notice = format!(
                                         "Saved {}",
                                         p.file_name().unwrap_or_default().to_string_lossy()
                                     )
                                 }
-                                Err(e) => app.notice = format!("Corpus export failed: {e}"),
+                                Err(e) => app.notice = format!("Report export failed: {e}"),
                             }
                         }
                         _ => {}
