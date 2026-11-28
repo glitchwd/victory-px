@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -71,4 +73,43 @@ func TestCompareCheckoutUsesLocalObjects(t *testing.T) {
 	check(second, "Upstream commit outside checkout history")
 	git("remote", "set-url", "origin", "https://example.invalid/private.git")
 	check(first, "Checkout comparison unavailable")
+}
+
+func TestInstallLatestRelease(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "victory.exe")
+	if err := os.WriteFile(target, []byte("old-binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var serverURL string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/releases":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `[{"tag_name":"v2026.11.28.01","assets":[{"name":"victory.exe","browser_download_url":"%s/download/victory.exe"}]}]`, serverURL)
+		case "/download/victory.exe":
+			w.Write([]byte("new-victory-exe"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	serverURL = server.URL
+
+	build := forkBuild{Name: nvidiaForkName, Dir: dir, Binary: target}
+	res := installLatestRelease(context.Background(), server.Client(), server.URL+"/releases", build)
+	if res.err != nil {
+		t.Fatalf("installLatestRelease failed: %v", res.err)
+	}
+	if res.tag != "v2026.11.28.01" {
+		t.Fatalf("got tag %q, want v2026.11.28.01", res.tag)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "new-victory-exe" {
+		t.Fatalf("got binary content %q, want new-victory-exe", string(got))
+	}
 }

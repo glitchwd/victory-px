@@ -8,7 +8,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -17,11 +19,12 @@ import (
 )
 
 const (
-	upstreamRepo     = "Belobug/VIctory-Belobug-AMD"
-	upstreamBranch   = "a-publier"
-	upstreamAPI      = "https://api.github.com/repos/" + upstreamRepo
-	upstreamInterval = 15 * time.Minute
-	maxUpstreamBytes = 512 << 10
+	upstreamRepo         = "Belobug/VIctory-Belobug-AMD"
+	upstreamBranch       = "a-publier"
+	upstreamAPI          = "https://api.github.com/repos/" + upstreamRepo
+	upstreamInterval     = 15 * time.Minute
+	maxUpstreamBytes     = 512 << 10
+	maxReleaseAssetBytes = 128 << 20
 )
 
 var commitSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
@@ -116,6 +119,136 @@ func readLatestRelease(ctx context.Context, client *http.Client, endpoint string
 	result.publishedAt = release.PublishedAt
 	result.assetCount = len(release.Assets)
 	return
+}
+
+type releaseUpdateResult struct {
+	build forkBuild
+	tag   string
+	err   error
+}
+
+type releaseAsset struct {
+	Name        string `json:"name"`
+	DownloadURL string `json:"browser_download_url"`
+}
+
+func downloadLatestRelease(ctx context.Context, build forkBuild) tea.Cmd {
+	return func() tea.Msg {
+		repo := build.releaseRepository()
+		if repo == "" {
+			return releaseUpdateResult{err: errors.New("this build does not track GitHub releases")}
+		}
+		client := &http.Client{Timeout: 60 * time.Second}
+		return installLatestRelease(ctx, client, "https://api.github.com/repos/"+repo+"/releases?per_page=1", build)
+	}
+}
+
+func installLatestRelease(ctx context.Context, client *http.Client, endpoint string, build forkBuild) releaseUpdateResult {
+	var releases []struct {
+		Tag    string         `json:"tag_name"`
+		Name   string         `json:"name"`
+		Assets []releaseAsset `json:"assets"`
+	}
+	if _, err := githubJSON(ctx, client, endpoint, &releases); err != nil {
+		return releaseUpdateResult{err: err}
+	}
+	if len(releases) == 0 {
+		return releaseUpdateResult{err: errors.New("no published releases found")}
+	}
+	release := releases[0]
+	tag := clip(terminalText(release.Tag), 120)
+	if tag == "" {
+		tag = clip(terminalText(release.Name), 120)
+	}
+	if tag == "" {
+		tag = "latest"
+	}
+	asset, ok := pickReleaseExecutable(release.Assets)
+	if !ok {
+		return releaseUpdateResult{err: errors.New("no .exe asset found in latest release")}
+	}
+	target := build.Binary
+	if target == "" {
+		target = filepath.Join(build.Dir, "victory.exe")
+	}
+	if err := downloadFile(ctx, client, asset.DownloadURL, target); err != nil {
+		return releaseUpdateResult{err: err}
+	}
+	build.Binary = target
+	return releaseUpdateResult{build: build, tag: tag}
+}
+
+func pickReleaseExecutable(assets []releaseAsset) (releaseAsset, bool) {
+	var fallback releaseAsset
+	var hasFallback bool
+	for _, asset := range assets {
+		if asset.DownloadURL == "" {
+			continue
+		}
+		if strings.EqualFold(asset.Name, "victory.exe") {
+			return asset, true
+		}
+		if !hasFallback && strings.HasSuffix(strings.ToLower(asset.Name), ".exe") {
+			fallback = asset
+			hasFallback = true
+		}
+	}
+	return fallback, hasFallback
+}
+
+func downloadFile(ctx context.Context, client *http.Client, rawURL, target string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", "victory-px")
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
+	}
+	dir := filepath.Dir(target)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".victory-release-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			os.Remove(tmpName)
+		}
+	}()
+	written, err := io.Copy(tmp, io.LimitReader(resp.Body, maxReleaseAssetBytes+1))
+	if err != nil {
+		tmp.Close()
+		return err
+	}
+	if written == 0 {
+		tmp.Close()
+		return errors.New("downloaded release executable is empty")
+	}
+	if written > maxReleaseAssetBytes {
+		tmp.Close()
+		return errors.New("downloaded release executable exceeds size limit")
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpName, 0o755); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpName, target); err != nil {
+		return err
+	}
+	cleanup = false
+	return nil
 }
 
 func readUpstream(ctx context.Context, client *http.Client, endpoint string) (result upstreamResult) {

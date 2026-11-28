@@ -20,7 +20,7 @@ import (
 
 const diagBinary = "target/x86_64-pc-windows-msvc/diag/victory.exe"
 
-var releaseVersion string
+var releaseVersion = "v0.2.0"
 
 type config struct {
 	dir, binary, title, wine         string

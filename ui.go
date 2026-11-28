@@ -95,6 +95,7 @@ type model struct {
 	forkIndex                     int
 	forkError                     string
 	pickingPath                   bool
+	updatingRelease               bool
 }
 
 func newModel(ctx context.Context, workers *sync.WaitGroup, cfg config) *model {
@@ -348,6 +349,28 @@ func (m *model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.forkMenu && m.cfg.forkName == nvidiaRTForkName {
 			return m, tea.Batch(m.checkUpstream(), nextUpstreamCheck())
 		}
+	case releaseUpdateResult:
+		m.updatingRelease = false
+		if msg.err != nil {
+			m.forkError = msg.err.Error()
+			return m, nil
+		}
+		if err := saveForkBuild(msg.build); err != nil {
+			m.forkError = err.Error()
+			return m, nil
+		}
+		for i, existing := range m.cfg.forks {
+			if existing.Name == msg.build.Name {
+				m.cfg.forks[i] = msg.build
+				break
+			}
+		}
+		if m.cfg.forkName == msg.build.Name {
+			m.cfg.binary = msg.build.Binary
+		}
+		m.forkError = ""
+		m.notice = fmt.Sprintf("Updated %s to %s", msg.build.label(), msg.tag)
+		return m, m.checkUpstream()
 	case tea.MouseMsg:
 		if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
 			return m, m.forkClick(msg.X, msg.Y)
@@ -482,7 +505,7 @@ func (m *model) forkMenuKey(key string) tea.Cmd {
 		m.forkIndex = max(0, m.forkIndex-1)
 	case "right":
 		m.forkIndex = min(m.forkIndex+1, len(m.cfg.forks))
-	case "enter", "n", "e", "g", "f":
+	case "enter", "n", "e", "g", "f", "u", "x", "delete", "backspace":
 		if m.cancelRun != nil {
 			m.forkError = "Stop the session with S after closing this menu."
 			return nil
@@ -512,6 +535,46 @@ func (m *model) forkMenuKey(key string) tea.Cmd {
 		case "g", "f":
 			m.pickingPath, m.forkError = true, ""
 			return chooseGame(m.ctx, m.cfg.title, key == "f")
+		case "u":
+			if m.cfg.title == "" {
+				m.forkError = "Choose the game executable or folder first (G or F)."
+				return nil
+			}
+			if m.forkIndex >= len(m.cfg.forks) {
+				m.forkError = "Select a saved build to update, or add one first (N)."
+				return nil
+			}
+			build := m.cfg.forks[m.forkIndex]
+			if build.Dir == "" || build.Binary == "" {
+				m.forkError = "Set the build folder and executable first (E)."
+				return nil
+			}
+			if build.releaseRepository() == "" {
+				m.forkError = "Selected build does not track GitHub releases."
+				return nil
+			}
+			m.updatingRelease, m.forkError = true, ""
+			return downloadLatestRelease(m.ctx, build)
+		case "x", "delete", "backspace":
+			if m.forkIndex >= len(m.cfg.forks) || m.cfg.forks[m.forkIndex].Name == "" {
+				m.forkError = "Select a saved build to delete."
+				return nil
+			}
+			build := m.cfg.forks[m.forkIndex]
+			if err := deleteForkBuild(build.Name); err != nil {
+				m.forkError = err.Error()
+				return nil
+			}
+			m.cfg.forks = append(m.cfg.forks[:m.forkIndex], m.cfg.forks[m.forkIndex+1:]...)
+			if m.forkIndex >= len(m.cfg.forks) && m.forkIndex > 0 {
+				m.forkIndex--
+			}
+			if m.cfg.forkName == build.Name {
+				m.cfg.forkName, m.cfg.dir, m.cfg.binary = "", "", ""
+				m.upstream, m.upstreamErr = upstreamResult{}, nil
+			}
+			m.forkError = ""
+			m.notice = "Removed fork: " + build.label()
 		}
 	}
 	return nil
@@ -763,12 +826,14 @@ func (m *model) forkMenuView() string {
 	switch {
 	case m.pickingPath:
 		rows = append(rows, "Waiting for system picker…")
+	case m.updatingRelease:
+		rows = append(rows, "Downloading latest release…")
 	case m.forkError != "":
 		rows = append(rows, failure.Render(terminalText(m.forkError)))
 	default:
 		rows = append(rows, "")
 	}
-	rows = append(rows, muted.Render("Arrows Select · Enter Equip · E Edit · Esc Back"))
+	rows = append(rows, muted.Render("Arrows Select · Enter Equip · E Edit · U Update · X Delete · Esc Back"))
 	for i, row := range rows {
 		rows[i] = clip(row, m.width)
 	}

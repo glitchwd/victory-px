@@ -140,6 +140,21 @@ func saveForkBuild(build forkBuild) error {
 	return writeLocalConfig(filepath.Join(dir, build.Name+".json"), build)
 }
 
+func deleteForkBuild(name string) error {
+	if !forkNamePattern.MatchString(name) {
+		return errors.New("invalid fork name")
+	}
+	dir, err := forkConfigDir()
+	if err != nil {
+		return err
+	}
+	err = os.Remove(filepath.Join(dir, name+".json"))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
+}
+
 func gameConfigPath() (string, error) {
 	dir, err := forkConfigDir()
 	if err != nil {
