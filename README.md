@@ -4,7 +4,7 @@ This guide covers the Rust launcher on the `lighthouse` branch.
 
 > OpenCode-inspired Rust (`ratatui`) TUI launcher, fork loadout, and Lighthouse-style benchmark monitor for **VIctory** builds on Linux.
 
-![victory-px TUI](screenshots/victory-px-monitor.png)
+![victory-px TUI](screenshots/victory-px-tui.gif)
 
 ---
 
