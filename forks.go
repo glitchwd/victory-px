@@ -13,6 +13,8 @@ import (
 var forkNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,39}$`)
 
 const (
+	nvidiaForkName   = "nvidia"
+	nvidiaRepo       = "trustno1-coder/VIctory-NVIDIA"
 	nvidiaRTForkName = "nvidia-rt"
 	nvidiaRTRepo     = "Kemerd/VIctory-NVIDIA-RT"
 )
@@ -27,17 +29,25 @@ func (build forkBuild) label() string {
 	if build.Name == "" {
 		return "Command line"
 	}
-	if build.Name == nvidiaRTForkName {
+	switch build.Name {
+	case nvidiaForkName:
+		return "VIctory NVIDIA"
+	case nvidiaRTForkName:
 		return "VIctory NVIDIA-RT"
+	default:
+		return build.Name
 	}
-	return build.Name
 }
 
 func (build forkBuild) releaseRepository() string {
-	if build.Name == nvidiaRTForkName {
+	switch build.Name {
+	case nvidiaForkName:
+		return nvidiaRepo
+	case nvidiaRTForkName:
 		return nvidiaRTRepo
+	default:
+		return ""
 	}
-	return ""
 }
 
 func (cfg *config) selectFork(build forkBuild) error {
