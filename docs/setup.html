@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Setup &amp; Launch — victory-px</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <span class="badge">SETUP // PREFIX · RUNTIME · ENV</span>
+      <h1>Setup &amp; Launch</h1>
+      <p class="subtitle">
+        Build the Rust launcher on the <code>lighthouse</code> branch and configure Wine or GE-Proton prefixes.
+      </p>
+      <nav class="pills">
+        <a href="index.html">Overview</a>
+        <a class="active" href="setup.html">Setup &amp; Launch</a>
+        <a href="inventory.html">Fork Inventory</a>
+        <a href="display.html">Display &amp; Gamescope</a>
+        <a href="reporting.html">Reporting &amp; Corpus</a>
+      </nav>
+    </header>
+
+    <h2>Requirements</h2>
+    <ul>
+      <li>Linux x86-64 and a current stable Rust toolchain with Cargo.</li>
+      <li>Wine or Wine64, or the Wine executable from a compatible Proton distribution. Use an initialized prefix with a <code>Z:</code> drive mapped to <code>/</code>.</li>
+      <li>A compiled VIctory Windows binary and a supported title executable.</li>
+      <li>Optional: Gamescope for the nested display, <code>xdg-open</code> for opening reports and folders, and <code>nvidia-smi</code> for NVIDIA telemetry (AMD uses sysfs).</li>
+    </ul>
+
+    <h2>Build and Launch</h2>
+    <pre><code>cargo build --release --locked --manifest-path victory-px-rs/Cargo.toml
+./victory-px-rs/target/release/victory-px --help
+./victory-px-rs/target/release/victory-px</code></pre>
+
+    <p>A direct launch can use explicit paths to the build and title:</p>
+    <pre><code>./victory-px-rs/target/release/victory-px \
+  --victory-dir /path/to/VIctory \
+  --victory-bin /path/to/victory.exe \
+  --exe /path/to/title.exe</code></pre>
+
+    <h2>Prefixes &amp; Environment</h2>
+    <p>
+      If <code>--victory-bin</code> is omitted, the default is <code>target/x86_64-pc-windows-msvc/diag/victory.exe</code> inside <code>--victory-dir</code>.
+      <code>VICTORY_DIR</code> and <code>VICTORY_EXE</code> supply defaults for their corresponding flags.
+    </p>
+    <div class="note">
+      When <code>--wine</code> is omitted, the launcher automatically detects a Steam GE-Proton installation and applies <code>WINEDLLOVERRIDES</code> for DXVK/VKD3D-Proton, falling back to system Wine if none is found. Set <code>WINEPREFIX</code> explicitly (for example to an initialized prefix under <code>${XDG_DATA_HOME:-~/.local/share}/victory-px/</code>), because leaving <code>WINEPREFIX</code> unset uses <code>~/.wine</code>.
+    </div>
+    <p>
+      The root <code>launch-*.sh</code> helpers use the Rust release binary and export <code>WINEPREFIX</code> automatically. Override discovery with <code>PX_PROTON_DIR</code> and <code>PX_PROTON_PREFIX</code> as needed. The Go package at the repository root is retained as legacy source.
+    </p>
+
+    <footer>
+      <span>victory-px // setup</span>
+      <span><a href="index.html">Back to Overview</a></span>
+    </footer>
+  </div>
+</body>
+</html>

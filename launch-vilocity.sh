@@ -4,7 +4,8 @@ set -euo pipefail
 fail() { printf 'Victory-PX Vilocity: %s\n' "$*" >&2; exit 1; }
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-[[ -x "$root/victory-px" ]] || fail 'Build Victory-PX first with: go build -trimpath -o victory-px .'
+launcher="$root/victory-px-rs/target/release/victory-px"
+[[ -x "$launcher" ]] || fail 'Build Victory-PX first with: cargo build --release --locked --manifest-path victory-px-rs/Cargo.toml'
 
 proton=${PX_PROTON_DIR:-$HOME/.local/share/Steam/compatibilitytools.d/GE-Proton11-14-x86_64}
 if [[ ! -x "$proton/files/bin/wine" || ! -r "$proton/version" ]]; then
@@ -21,6 +22,6 @@ export WINEPREFIX=${PX_PROTON_PREFIX:-$data_home/victory-px/prefix-${proton##*/}
 # Use the prefix's Proton graphics DLLs when invoking Wine outside Steam.
 export WINEDLLOVERRIDES="d3d12,d3d12core,dxgi,d3d11,d3d10core,d3d9=n;d3dcompiler_47=n,b${WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}"
 
-exec "$root/victory-px" --fork vilocity \
+exec "$launcher" --fork vilocity \
     --wine "$proton/files/bin/wine" --runtime-label "$proton_release" \
-    --check-updates "$@"
+    "$@"

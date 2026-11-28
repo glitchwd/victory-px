@@ -18,6 +18,8 @@ var (
 	privateRE   = regexp.MustCompile(`(?i)\bprivate\s+([0-9]+)\s+MiB\b`)
 	vramRE      = regexp.MustCompile(`(?i)\bdriver:\s+video\s+([0-9]+)\s+of\s+([0-9]+)\s+MiB\b`)
 	levelRE     = regexp.MustCompile(`^(?:\S+T\S+\s+)?(WARN(?:ING)?|ERROR)(?:[ :\[]|$)`)
+	logUnitsRE  = regexp.MustCompile("(?i)\\b(?:[0-9]+(?:\\.[0-9]+)?[ \\t]+(?:ms|draws)/frame|dropped[ \\t]+[0-9]+(?:\\.[0-9]+)?/frame)\\b")
+	logPathRE   = regexp.MustCompile("(?i)(?:[/\\\\]|\\b[a-z]:[^\\s:]|\\b(?:path|root|storage|filename|directory|cwd|log)[\"']?\\s*[:=]|%(?:2f|5c|3a))")
 )
 
 type reading struct {
@@ -25,8 +27,32 @@ type reading struct {
 	at    time.Time
 }
 
+type metricAgg struct {
+	min, max, sum float64
+	count         int
+}
+
+func (a *metricAgg) add(value float64) {
+	if a.count == 0 || value < a.min {
+		a.min = value
+	}
+	if a.count == 0 || value > a.max {
+		a.max = value
+	}
+	a.sum += value
+	a.count++
+}
+
+func (a metricAgg) avg() float64 {
+	if a.count == 0 {
+		return 0
+	}
+	return a.sum / float64(a.count)
+}
+
 type runStats struct {
 	fps, frameTime, draws, dropped reading
+	fpsAgg, frameTimeAgg           metricAgg
 	privateRAM, vram, vramBudget   reading
 	warnings, errors               int
 }
@@ -50,8 +76,15 @@ func terminalText(s string) string {
 	}, ansi.Strip(strings.TrimRight(s, "\r\n")))
 }
 
+func privateLogText(s string) string {
+	if logPathRE.MatchString(logUnitsRE.ReplaceAllString(s, " ")) {
+		return "path hidden"
+	}
+	return s
+}
+
 func (s *runStats) record(text string, now time.Time) logLine {
-	line := logLine{text: text}
+	line := logLine{text: privateLogText(text)}
 	for _, metric := range []struct {
 		re  *regexp.Regexp
 		dst *reading
@@ -62,6 +95,12 @@ func (s *runStats) record(text string, now time.Time) logLine {
 		if match := metric.re.FindStringSubmatch(text); match != nil {
 			if value, err := strconv.ParseFloat(match[1], 64); err == nil {
 				*metric.dst = reading{value, now}
+				switch metric.dst {
+				case &s.fps:
+					s.fpsAgg.add(value)
+				case &s.frameTime:
+					s.frameTimeAgg.add(value)
+				}
 				line.metric = true
 			}
 		}

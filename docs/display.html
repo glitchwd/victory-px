@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Display &amp; Gamescope — victory-px</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <span class="badge">DISPLAY // WINE DIRECT · GAMESCOPE · FSR</span>
+      <h1>Display &amp; Gamescope</h1>
+      <p class="subtitle">
+        Switch between Wine direct and nested Gamescope, configure FSR upscaling, fullscreen, and frame caps.
+      </p>
+      <nav class="pills">
+        <a href="index.html">Overview</a>
+        <a href="setup.html">Setup &amp; Launch</a>
+        <a href="inventory.html">Fork Inventory</a>
+        <a class="active" href="display.html">Display &amp; Gamescope</a>
+        <a href="reporting.html">Reporting &amp; Corpus</a>
+      </nav>
+    </header>
+
+    <h2>Display Controls</h2>
+    <p>
+      Wine direct is the default. Press <code>2</code> for Display or <code>G</code> to open Gamescope settings on any tab. <code>Space</code> or <code>Enter</code> switches the backend in the modal. Changes apply to the next run.
+    </p>
+    <p>
+      While stopped, use <code>P</code> for presets, <code>A</code> for FSR and <code>L</code> for the frame cap (unlimited, 30 or 60). Use <code>F</code> in the modal or <code>Enter</code> on the Display tab for fullscreen. <code>Esc</code> or <code>G</code> closes the modal.
+    </p>
+
+    <h2>Presets</h2>
+    <table>
+      <thead>
+        <tr><th>Preset</th><th>Game Resolution</th><th>Output Size</th><th>Filter</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>small</code></td><td>1280 × 720</td><td>1280 × 720</td><td>Linear</td></tr>
+        <tr><td><code>upscale</code></td><td>1280 × 720</td><td>1920 × 1080</td><td>FSR</td></tr>
+        <tr><td><code>1080p</code></td><td>1920 × 1080</td><td>1920 × 1080</td><td>Linear</td></tr>
+      </tbody>
+    </table>
+
+    <h2>CLI Example</h2>
+    <pre><code>./victory-px-rs/target/release/victory-px --fork my-build --exe /path/to/title.exe \
+  --gamescope --display-preset upscale --fullscreen --fps-limit 30</code></pre>
+    <p>A frame cap requires a Gamescope build that supports <code>--framerate-limit</code>.</p>
+
+    <footer>
+      <span>victory-px // display</span>
+      <span><a href="index.html">Back to Overview</a></span>
+    </footer>
+  </div>
+</body>
+</html>

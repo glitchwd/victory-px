@@ -113,7 +113,7 @@ func nvidiaRTLaunchArgs() []string {
 	}
 }
 
-func runProcess(ctx context.Context, cmd *exec.Cmd, raw io.Writer, events chan<- tea.Msg) (result processFinished) {
+func runProcess(ctx context.Context, cmd *exec.Cmd, savedLog io.Writer, events chan<- tea.Msg) (result processFinished) {
 	if ctx.Err() != nil {
 		result.stopped = true
 		return
@@ -139,7 +139,7 @@ func runProcess(ctx context.Context, cmd *exec.Cmd, raw io.Writer, events chan<-
 	}
 
 	output := make(chan processFinished, 1)
-	go func() { output <- readOutput(reader, raw, events) }()
+	go func() { output <- readOutput(reader, savedLog, events) }()
 	pid := cmd.Process.Pid
 	exited := make(chan error, 1)
 	go func() {
@@ -209,30 +209,34 @@ const wineComputePipelineFault = ":err:vulkan:vkCreateComputePipelines Exception
 
 var errComputePipelineCrash = errors.New("Vulkan compute pipeline crashed under Wine (0xc0000005)")
 
-func readOutput(reader io.Reader, raw io.Writer, events chan<- tea.Msg) (result processFinished) {
+func readOutput(reader io.Reader, savedLog io.Writer, events chan<- tea.Msg) (result processFinished) {
 	buffer := bufio.NewReaderSize(reader, 8*1024)
 	var truncated bool
 	remaining := maxLogBytes
 	for {
 		chunk, err := buffer.ReadSlice('\n')
-		if raw != nil && len(chunk) > 0 && result.logErr == nil {
-			n, writeErr := raw.Write(chunk[:min(len(chunk), remaining)])
-			remaining -= n
-			switch {
-			case writeErr != nil:
-				result.logErr = writeErr
-			case n < len(chunk):
-				result.logErr = errors.New("32 MiB limit reached")
-			}
-		}
 		if len(chunk) > 0 && !truncated {
 			line := terminalText(string(chunk))
 			if strings.Contains(line, wineComputePipelineFault) {
 				result.err = errComputePipelineCrash
 			}
 			if errors.Is(err, bufio.ErrBufferFull) {
-				line += " [line truncated]"
+				line = "[line truncated]"
 				result.dropped++
+			} else {
+				line = privateLogText(line)
+			}
+			if savedLog != nil && result.logErr == nil {
+				entry := line + "\n"
+				if len(entry) > remaining {
+					result.logErr = errors.New("32 MiB limit reached")
+				} else if n, writeErr := io.WriteString(savedLog, entry); writeErr != nil {
+					result.logErr = writeErr
+				} else if n < len(entry) {
+					result.logErr = io.ErrShortWrite
+				} else {
+					remaining -= n
+				}
 			}
 			select {
 			case events <- processLine(line):

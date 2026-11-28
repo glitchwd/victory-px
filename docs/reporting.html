@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reporting &amp; Corpus — victory-px</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <span class="badge">TELEMETRY // LIGHTHOUSE · CORPUS · BENCH</span>
+      <h1>Reporting &amp; Corpus</h1>
+      <p class="subtitle">
+        Export Lighthouse HTML reports, Corpus Markdown bundles, and run repeatable headless benchmarks.
+      </p>
+      <nav class="pills">
+        <a href="index.html">Overview</a>
+        <a href="setup.html">Setup &amp; Launch</a>
+        <a href="inventory.html">Fork Inventory</a>
+        <a href="display.html">Display &amp; Gamescope</a>
+        <a class="active" href="reporting.html">Reporting &amp; Corpus</a>
+      </nav>
+    </header>
+
+    <h2>Exports</h2>
+    <ul>
+      <li><code>3</code> opens the Lighthouse panel.</li>
+      <li><code>R</code> saves <code>lighthouse-*.html</code> and asks <code>xdg-open</code> to display it.</li>
+      <li><code>W</code> saves <code>corpus-*.md</code> with a short message and a full report outline.</li>
+    </ul>
+    <p>
+      Reports live in <code>${XDG_STATE_HOME:-~/.local/state}/victory-px/reports/</code> with mode <code>0600</code> and unique filenames.
+    </p>
+
+    <h2>Headless Benchmark</h2>
+    <pre><code>./victory-px-rs/target/release/victory-px --fork my-build --exe /path/to/title.exe \
+  --bench --duration 30</code></pre>
+    <p>
+      The command stops after the requested duration or when the child exits. It prints the results and writes both reports without requiring a terminal UI or desktop opener.
+    </p>
+
+    <h2>What the Reports Contain</h2>
+    <p>
+      Both formats use recognized numeric telemetry, warning and error counts, launch settings, run duration, and coarse hardware details such as GPU vendor and memory capacity. They omit raw logs, paths, custom profile names, custom runtime labels, and host probe strings.
+    </p>
+    <p>
+      Performance compares measured FPS to 60 FPS. Stability is a heuristic based on logged warnings and errors. Headroom uses detected VRAM and shows unavailable when that probe yields no reading.
+    </p>
+
+    <h2>Session Logs</h2>
+    <p>
+      Victory-PX hides path-bearing child output in the monitor, including Windows, Wine and Linux paths. In the Rust monitor, hold <code>Ctrl+P</code> to temporarily preview the original lines on terminals that report key releases; this preview is excluded from reports and saved logs.
+    </p>
+
+    <footer>
+      <span>victory-px // reporting</span>
+      <span><a href="index.html">Back to Overview</a></span>
+    </footer>
+  </div>
+</body>
+</html>

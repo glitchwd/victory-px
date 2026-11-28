@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>victory-px — Documentation</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <span class="badge">VIctory Proton eXecutor</span>
+      <h1>victory-px</h1>
+      <p class="subtitle">
+        Linux TUI launcher, telemetry monitor, and benchmark suite for running VIctory builds through Wine, Proton, and Gamescope.
+      </p>
+      <nav class="pills">
+        <a class="active" href="index.html">Overview</a>
+        <a href="setup.html">Setup &amp; Launch</a>
+        <a href="inventory.html">Fork Inventory</a>
+        <a href="display.html">Display &amp; Gamescope</a>
+        <a href="reporting.html">Reporting &amp; Corpus</a>
+      </nav>
+    </header>
+
+    <h2>Documentation</h2>
+    <div class="grid">
+      <a class="card" href="setup.html">
+        <div class="card-title">Setup &amp; Launch</div>
+        <p>Build from source, configure Wine prefixes, environment defaults, and helper scripts.</p>
+      </a>
+      <a class="card" href="inventory.html">
+        <div class="card-title">Fork Inventory</div>
+        <p>Tiered ASCII loadout, rarity tiers, CLI registration, and custom fork profiles.</p>
+      </a>
+      <a class="card" href="display.html">
+        <div class="card-title">Display &amp; Gamescope</div>
+        <p>Wine direct vs Gamescope, presets, FSR upscaling, fullscreen, and FPS limits.</p>
+      </a>
+      <a class="card" href="reporting.html">
+        <div class="card-title">Reporting &amp; Corpus</div>
+        <p>Lighthouse HTML, Corpus Markdown, and headless benchmarks.</p>
+      </a>
+    </div>
+
+    <h2>Quick Start</h2>
+    <pre><code>cargo build --release --locked --manifest-path victory-px-rs/Cargo.toml
+./victory-px-rs/target/release/victory-px --help
+./victory-px-rs/target/release/victory-px</code></pre>
+
+    <h2>Keybindings</h2>
+    <table>
+      <thead>
+        <tr><th>Key</th><th>Action</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>1 / 2 / 3</code></td><td>Open Monitor, Display, or Lighthouse</td></tr>
+        <tr><td><code>B / N</code></td><td>Open the loadout or add a fork from it</td></tr>
+        <tr><td><code>O / G</code></td><td>Browse for the title executable or configure Gamescope</td></tr>
+        <tr><td><code>C</code></td><td>Change the console profile while stopped</td></tr>
+        <tr><td><code>S</code></td><td>Start or stop the session</td></tr>
+        <tr><td><code>R / W</code></td><td>Save Lighthouse HTML or Corpus Markdown</td></tr>
+        <tr><td><code>T</code></td><td>Adjust the logo theme and animation</td></tr>
+        <tr><td><code>X / V</code></td><td>Open highlighted fork folder or game folder</td></tr>
+        <tr><td><code>Q / Ctrl+C</code></td><td>Quit and stop the session</td></tr>
+      </tbody>
+    </table>
+
+    <footer>
+      <span><a href="https://github.com/glitchwd/victory-px">glitchwd / victory-px</a></span>
+    </footer>
+  </div>
+</body>
+</html>

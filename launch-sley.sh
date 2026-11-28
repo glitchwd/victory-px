@@ -4,8 +4,9 @@ set -euo pipefail
 fail() { printf 'Sley: %s\n' "$*" >&2; exit 1; }
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-[[ -t 0 && -t 1 ]] || fail 'Open a terminal in victory-px-gamescope and run ./launch-sley.sh.'
-[[ -x "$root/victory-px" ]] || fail 'Build the launcher with: go build -trimpath -o victory-px .'
+[[ -t 0 && -t 1 ]] || fail 'Open a terminal in the repository and run ./launch-sley.sh.'
+launcher="$root/victory-px-rs/target/release/victory-px"
+[[ -x "$launcher" ]] || fail 'Build the launcher with: cargo build --release --locked --manifest-path victory-px-rs/Cargo.toml'
 
 proton=${PX_PROTON_DIR:-$HOME/.steam/root/compatibilitytools.d/GE-Proton11-14-x86_64}
 [[ -x "$proton/files/bin/wine" && -r "$proton/version" ]] \
@@ -26,5 +27,5 @@ export WINEDLLOVERRIDES="d3d12,d3d12core,dxgi,d3d11,d3d10core,d3d9=n;d3dcompiler
 export VICTORY_CARD_BUFFERS_MIN_KB=${VICTORY_CARD_BUFFERS_MIN_KB:-64}
 export VICTORY_CARD_BUFFERS_MB=${VICTORY_CARD_BUFFERS_MB:-2048}
 
-exec "$root/victory-px" --fork sley --wine "$proton/files/bin/wine" \
+exec "$launcher" --fork sley --wine "$proton/files/bin/wine" \
     --runtime-label "$release" --series-s --gamescope "$@"

@@ -1,203 +1,73 @@
 # victory-px
 
-![Victory PX terminal monitor showing system diagnostics, performance history and session logs](victory-px-monitor.png)
+This guide covers the Rust launcher on the `lighthouse` branch.
 
-Victory-PX is an experimental Linux launcher for comparing how VIctory builds
-run under Wine, with or without Gamescope. It started as a tool for personal
-compatibility tests. You can start a session, watch frame rate and GPU usage,
-and inspect logs from the same terminal.
+> OpenCode-inspired Rust (`ratatui`) TUI launcher, fork loadout, and Lighthouse-style benchmark monitor for **VIctory** builds on Linux.
 
-## Setup
+[![Rust](https://img.shields.io/badge/Rust-2021-orange?style=flat-square&logo=rust)](victory-px-rs/Cargo.toml)
+[![Platform Linux](https://img.shields.io/badge/Platform-Linux%20x86__64-00F0FF?style=flat-square&logo=linux&logoColor=black)](#quick-start)
+[![Docs](https://img.shields.io/badge/Docs-lighthouse-FF2A85?style=flat-square)](docs/index.html)
 
-Download the Linux x86-64 archive and `SHA256SUMS` from [Releases](../../releases).
-Save both in the same directory, then run `sha256sum -c SHA256SUMS` before
-extracting the archive. To build from source, use a supported Go release
-(Go 1.21 or newer).
+---
 
-You also need Wine, a terminal, your own Windows build of VIctory, and a
-title executable supported by that build.
-Follow VIctory's build instructions for its dependencies and supported titles.
+## Highlights
+
+- **Tiered Fork Loadout (`B`)** — Tiered ASCII inventory (`Covert`, `Classified`, `Restricted`, `Mil-Spec`), in-TUI 3-step fork wizard (`N`) with automatic `victory.exe` scan, folder opener (`X`/`V`), and hidden paths in the inventory.
+- **Lighthouse Reports (`3` / `R` / `--bench`)** — Live in-app **Performance / Stability / Headroom** gauges, repeatable headless benchmarks (`--bench --duration 30`), and standalone Chrome Lighthouse-style HTML exports.
+- **Quick Modals** — Gamescope & display config (`G`), integrated `.exe` / folder browser (`O`), and animated **Vice City / GTA VI** logo FX (`T`).
+- **Hardware Vitals** — Live host RAM, CPU, kernel, and GPU load/temp/VRAM for **NVIDIA** (`nvidia-smi`) and **AMD** (`amdgpu` sysfs).
+- **Corpus Export (`W`)** — Markdown bundle with metrics and launch settings for research threads.
+
+---
+
+## Quick Start
+
+Requires **Linux x86_64**, **Rust / Cargo**, **Wine** (or Proton), and a compiled `victory.exe`.
 
 ```sh
-go build -trimpath -o victory-px .
-./victory-px --victory-dir /path/to/VIctory --exe /path/to/title.exe
+cargo build --release --locked --manifest-path victory-px-rs/Cargo.toml
+./victory-px-rs/target/release/victory-px
 ```
 
-Run the build command from the Victory-PX source directory. It builds the
-Linux launcher. Compile VIctory separately to obtain the Windows `victory.exe`
-that Wine runs. VIctory's build instructions may require Windows and MSVC;
-building it on Linux requires a Windows cross-compilation toolchain.
-
-The default binary is `target/x86_64-pc-windows-msvc/diag/victory.exe` under
-`--victory-dir`. For a different build, pass `--victory-bin /path/to/victory.exe`.
-For example, a Windows diagnostics build may be placed under `target/diag/`:
+### Register a fork from CLI (optional)
 
 ```sh
-./victory-px \
+./victory-px-rs/target/release/victory-px --save-fork my-fork \
   --victory-dir /path/to/VIctory \
-  --victory-bin /path/to/VIctory/target/diag/victory.exe \
-  --exe /path/to/title.exe \
-  --series-s --gamescope --display-preset upscale
+  --victory-bin /path/to/VIctory/victory.exe
 ```
 
-`--victory-dir` selects VIctory's working directory, `--victory-bin` selects
-the Windows launcher binary, and `--exe` selects the title executable.
-After updating VIctory or creating a new Git worktree, compile that revision
-and select its resulting binary. A worktree contains source files; build
-outputs must be produced separately. Selecting an older `victory.exe` runs
-that older build even when the working directory contains newer sources.
-An error stating `VIctory binary: stat ... no such file or directory` means
-you need to build VIctory or point `--victory-bin` to an existing build.
-
-Use Linux paths. Wine uses its standard `Z:` drive mapped to `/` for the
-title and shader archive. Set `WINEPREFIX` to use a different Wine prefix.
-VIctory runs from the supplied working directory and reads its own configuration
-there. The companion does not require or generate `victory.toml`.
-
-`VICTORY_DIR` and `VICTORY_EXE` are environment defaults for the corresponding
-flags. `--help` lists the options. `--version` prints the Go module version,
-or `(devel)` for a local build. Choose Wine with `--wine` if needed. The child
-inherits your environment and Wine configuration.
-
-## Build compatibility
-
-Open **B Forks** with a click or the B key. Builds appear in an inventory of
-slots. Click a build to select it, or move with the arrow keys and press Enter.
-Click an empty slot to add a build. The grid moves through pages as needed.
-You can switch builds while the session is stopped. The title, Wine executable,
-console and display settings carry over.
-
-On a Linux desktop with Zenity installed, **Add build** opens system dialogs
-for the name, working folder and Windows executable of a compiled build.
-**Edit build** changes the paths of the highlighted saved build.
-**Choose game executable** opens the file picker directly. **Choose game folder**
-opens a folder picker, followed by the executable picker in that folder.
-The selected game executable is remembered for later runs. If either input is
-missing when Victory-PX opens, it starts in the fork picker.
-
-You can also register builds and select them from the command line.
+### Repeatable Headless Benchmark
 
 ```sh
-./victory-px --save-fork belobug --victory-dir /path/to/VIctory-Belobug-AMD
-./victory-px --save-fork fxceless --victory-dir /path/to/victory-fork \
-  --victory-bin /path/to/victory-fork/target/x86_64-pc-windows-msvc/release/victory.exe
-./victory-px --list-forks
-./victory-px --fork belobug --exe /path/to/title.exe
+./victory-px-rs/target/release/victory-px --fork my-fork --exe /path/to/title.exe --bench --duration 30
 ```
 
-Profiles live in `$XDG_CONFIG_HOME/victory-px/forks` (default
-`~/.config/victory-px/forks`). Saving a name again updates its paths. With only
-`--exe`, Victory-PX starts with the first available build in alphabetical order,
-unless a working directory is supplied through `VICTORY_DIR`. You can still
-launch a build directly with `--victory-dir` and `--victory-bin`.
+Outputs a Lighthouse HTML report (`lighthouse-*.html`) and a Markdown bundle (`corpus-*.md`) under `${XDG_STATE_HOME:-~/.local/state}/victory-px/reports/`.
 
-Each build must accept `run <title> --execute --console <profile>`. The optional
-shader translation action also requires `translate <archive>`. Log metrics
-depend on the build's output format. The GitHub update check uses the selected
-build's local Git origin and active branch. For a build without a Git checkout,
-the update status is unavailable.
+---
 
-### VIctory-NVIDIA-RT
-
-Register the release executable as the `nvidia-rt` build from **B Forks** (or
-with `--save-fork nvidia-rt --victory-dir DIR --victory-bin FILE`). PX uses the
-fork's `play` command and its published fast-path settings, while keeping the
-normal run/stop controls and optional Gamescope session. It starts the Series X
-profile by default; press **C** to use Series S. **T Translate** is unavailable
-for this build.
-
-`./launch-nvidia-rt.sh` opens PX with this build selected and the existing
-GE-Proton prefix. It does not start the game: **U** refreshes the release
-monitor immediately, and **S** starts the session when you are ready.
-
-With `nvidia-rt` selected, PX checks
-[Kemerd/VIctory-NVIDIA-RT](https://github.com/Kemerd/VIctory-NVIDIA-RT/releases)
-on startup and every 15 minutes. It reports the newest published release,
-including prereleases, in PortWatch; **U** refreshes it immediately. The
-release page can change independently of the installed executable, so PX
-reports the upstream version and publication time rather than claiming the
-local binary is current.
-
-When sharing a result, include the build or commit, Wine version, GPU, and
-Gamescope preset (or Wine direct).
-
-## Controls
+## Keybindings
 
 | Key | Action |
 | --- | --- |
-| S | Run the title or stop the current session |
-| T | Ask VIctory to translate `shaders.rpf` beside the title executable |
-| C / D | Change the console profile or open Display settings |
-| B | Choose a saved VIctory build |
-| F / [ / ] | Change the log filter or scroll |
-| R / Y | Save the session summary or copy it to the clipboard |
-| Tab / Shift+Tab | Cycle through Monitor, Display and PortWatch forwards or backwards |
-| U | Check the selected build on GitHub. In PortWatch, also refresh public headlines |
-| Q / Ctrl+C | Quit and stop the current session |
+| `1` / `2` / `3` | Switch between **Monitor**, **Display**, and **Lighthouse** |
+| `B` | Open **Forks Loadout** (tiered ASCII inventory) |
+| `N` | Add a new fork in-TUI (`Space` confirms dir, auto-scans `victory.exe`) |
+| `O` | Open integrated **Game Browser** (`.exe` / folder) |
+| `G` | Open **Gamescope** quick config modal |
+| `C` | Toggle console profile (`Series X` / `Series S`) |
+| `S` | Start or stop the active session |
+| `R` / `W` | Export **Lighthouse HTML** / **Corpus Markdown** |
+| `T` | Open **Theme & Logo FX** modal |
+| `X` / `V` | Open highlighted fork folder / game folder in file manager |
+| `Q` / `Ctrl+C` | Stop session and quit (`Ctrl+C` works while typing a profile name) |
 
-Clipboard copy uses `wl-copy` on Wayland or
-`xclip` / `xsel` on X11. The monitor reads Linux host RAM and, when available,
-GPU 0 via `nvidia-smi`. VIctory statistics depend on its log format and build
-options. Missing values are shown as dashes, and running values older than
-12 seconds are marked stale.
+---
 
-Stop and quit terminate the launched Linux process group. Wine services that
-are shared or detached, processes that create a new group, and a forced kill
-of the companion are outside that cleanup. A dedicated Wine prefix keeps
-the session separate from your other Wine applications.
+## Documentation
 
-## Display settings
-
-Wine direct is the default. Press D, then G to switch between Wine direct
-and Gamescope for the next run. In Display settings, P cycles through
-these presets:
-
-| Preset | Game resolution | Starting output size | Filter |
-| --- | --- | --- | --- |
-| Small | 1280x720 | 1280x720 | Linear |
-| Upscale | 1280x720 | 1920x1080 | FSR |
-| 1080p | 1920x1080 | 1920x1080 | Linear |
-
-I and O cycle the game resolution and output size independently. A toggles
-FSR, L cycles the frame rate limit (unlimited, 30, 60), and Enter switches
-the starting mode between windowed and fullscreen. For custom sizes or a
-different frame rate limit, use the command line:
-
-```sh
-./victory-px --victory-dir /path/to/VIctory --exe /path/to/title.exe \
-  --gamescope --display-preset upscale --game-size 1280x800 \
-  --window-size 1920x1200 --fullscreen --fps-limit 30
-```
-
-Options apply to the next launch. A smaller game resolution can help when
-VIctory uses it and rendering is limited by the GPU. The effective FPS
-limit can differ from the requested value depending on the refresh rate.
-The cap requires a Gamescope build with `--framerate-limit`.
-
-While the Gamescope window has focus, press **Super+F** to enter or leave
-fullscreen. In Wine direct, window shortcuts are handled by the game or
-desktop. See the [Gamescope controls](https://github.com/ValveSoftware/gamescope#keyboard-shortcuts).
-
-## Local files and network access
-
-Reports go to `${XDG_STATE_HOME:-~/.local/state}/victory-px/reports/`.
-Reports and clipboard summaries include the operation, status, selected launch
-options, and recognized numeric metrics. They exclude raw output, paths,
-environment values, timestamps, and host identifiers.
-
-Use `--save-log` to retain raw child output under
-`${XDG_STATE_HOME:-~/.local/state}/victory-px/logs/`. Report and log files are
-created with mode `0600`. Each raw log stops at 32 MiB. It can contain private
-data, so review it before sharing.
-
-Press U to check the selected checkout's public GitHub branch and latest stable
-GitHub release. Use `--check-updates` to check at startup and every 15 minutes
-while the companion is open. The Monitor shows the update status. PortWatch
-shows the public commit, release, and time of the last successful check.
-
-The GitHub requests use public endpoints derived from the selected checkout and no credentials. The
-comparison with the checked-out Git revision runs locally with Git lazy
-fetching disabled. The checker does not fetch Git objects, install a release,
-or verify which commit the existing `victory.exe` was built from. Without
-`--check-updates`, network requests start only on demand. Pressing U in
-PortWatch also fetches its public feed from `raw.githubusercontent.com`.
+- [Setup & Launch](docs/setup.md)
+- [Fork Inventory](docs/inventory.md)
+- [Display & Gamescope](docs/display.md)
+- [Reporting & Corpus](docs/reporting.md)

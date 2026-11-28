@@ -61,7 +61,7 @@ func parseFlags(args []string, out io.Writer, getenv func(string) string) (confi
 	flags.BoolVar(&fsr, "fsr", false, "Override the preset's FSR setting")
 	flags.BoolVar(&cfg.display.fullscreen, "fullscreen", false, "Start Gamescope in fullscreen")
 	flags.IntVar(&cfg.display.fpsLimit, "fps-limit", 0, "Gamescope frame rate limit (0 for unlimited)")
-	flags.BoolVar(&cfg.saveLog, "save-log", false, "Save a private local log of raw child output")
+	flags.BoolVar(&cfg.saveLog, "save-log", false, "Save a private local log with paths hidden")
 	flags.BoolVar(&cfg.checkUpdates, "check-updates", false, "Check the selected checkout on GitHub at startup and every 15 minutes")
 	flags.BoolVar(&version, "version", false, "Print version and exit")
 	if err := flags.Parse(args); err != nil {

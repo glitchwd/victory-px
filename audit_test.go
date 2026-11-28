@@ -167,7 +167,7 @@ func TestOutputDrainAndFailedStart(t *testing.T) {
 	input := strings.Repeat("x", 24*1024) + "\nnext line\n"
 	events := make(chan tea.Msg, 2)
 	result := readOutput(strings.NewReader(input), &raw, events)
-	if result.err != nil || result.dropped != 1 || raw.String() != input {
+	if result.err != nil || result.dropped != 1 || raw.String() != "[line truncated]\nnext line\n" {
 		t.Fatalf("long line interrupted output: %+v", result)
 	}
 	if !strings.HasSuffix(string((<-events).(processLine)), "[line truncated]") || (<-events) != processLine("next line") {
@@ -342,5 +342,36 @@ func TestHostMetricParsing(t *testing.T) {
 	parseGPU("12, [N/A], 256, 4096\n80, 50, 512, 8192\n", &m)
 	if m.gpuUtil != "12" || m.gpuTemp != "" || m.vramTotalMiB != "4096" {
 		t.Fatalf("multi-GPU parsing: %+v", m)
+	}
+}
+
+func TestChildLogPathsHiddenOnScreenAndDisk(t *testing.T) {
+	var saved bytes.Buffer
+	lines := []string{
+		"Log: C:\\users\\example\\AppData\\Local\\Demo\\play.log",
+		"INFO drive=G root=Z:\\home\\example\\Folder with spaces hides_host_drive=false",
+		"INFO resolved C:relative.exe",
+		"INFO mapped /mnt/media/Folder with spaces/app.exe",
+		"INFO found ../data/title.exe",
+		"INFO path=title.exe",
+		"INFO \x1b[31m/mnt/private\x1b[0m",
+	}
+	events := make(chan tea.Msg, len(lines)+1)
+	telemetry := "INFO 42 fps 23.81 ms/frame"
+	result := readOutput(strings.NewReader(strings.Join(append(lines, telemetry), "\n")), &saved, events)
+	if result.err != nil || result.logErr != nil || result.dropped != 0 {
+		t.Fatalf("output handling failed: %+v", result)
+	}
+	for range lines {
+		if event := <-events; event != processLine("path hidden") {
+			t.Fatalf("unexpected log event: %q", event)
+		}
+	}
+	if event := <-events; event != processLine(telemetry) {
+		t.Fatalf("unexpected telemetry: %q", event)
+	}
+	want := strings.Repeat("path hidden\n", len(lines)) + telemetry + "\n"
+	if saved.String() != want {
+		t.Fatal("saved output differs from the sanitized stream")
 	}
 }

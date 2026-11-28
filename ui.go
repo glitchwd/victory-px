@@ -210,7 +210,7 @@ func (m *model) handleRun(event runEvent) tea.Cmd {
 		switch {
 		case msg.err != nil:
 			m.session.state = failed
-			m.notice = strings.ReplaceAll(msg.err.Error(), "\n", " · ")
+			m.notice = privateLogText(terminalText(strings.ReplaceAll(msg.err.Error(), "\n", " · ")))
 		case msg.stopped || m.session.state == stopping:
 			m.session.state = stopped
 			m.notice = "Session stopped."
@@ -223,7 +223,7 @@ func (m *model) handleRun(event runEvent) tea.Cmd {
 		}
 		switch {
 		case msg.logErr != nil:
-			m.notice += " Local log incomplete: " + msg.logErr.Error()
+			m.notice += " Local log incomplete: " + privateLogText(terminalText(msg.logErr.Error()))
 		case msg.logName != "":
 			m.notice += " Local log: " + filepath.Base(msg.logName)
 		}
@@ -244,6 +244,52 @@ func (m *model) share(clipboard bool) tea.Cmd {
 			return actionResult{copy: true, err: copySummary(ctx, summary)}
 		}
 		path, err := writeReport(summary)
+		return actionResult{path: path, err: err}
+	}
+}
+
+func (m *model) shareCorpus() tea.Cmd {
+	if m.sharing {
+		return nil
+	}
+	m.sharing = true
+	m.notice = "Preparing Whiplash corpus report…"
+	ram := ""
+	if m.host.ramTotalMiB > 0 {
+		ram = fmt.Sprintf("%.1f GiB", float64(m.host.ramTotalMiB)/1024)
+	}
+	runtimeLabel := m.cfg.runtimeLabel
+	if runtimeLabel == "" && m.cfg.wine != "" {
+		runtimeLabel = filepath.Base(m.cfg.wine)
+	}
+	var dur time.Duration
+	if !m.startedAt.IsZero() {
+		if !m.endedAt.IsZero() {
+			dur = m.endedAt.Sub(m.startedAt)
+		} else {
+			dur = time.Since(m.startedAt)
+		}
+	}
+	meta := corpusMeta{
+		forkName:     m.cfg.forkName,
+		forkRepo:     forkBuild{Name: m.cfg.forkName}.releaseRepository(),
+		commit:       m.upstream.sha,
+		osName:       m.info.osName,
+		kernel:       m.info.kernel,
+		cpu:          m.info.cpu,
+		gpu:          m.info.gpu,
+		driver:       m.info.driver,
+		vram:         m.info.vram,
+		ramGiB:       ram,
+		runtimeLabel: runtimeLabel,
+		duration:     dur,
+		now:          time.Now(),
+	}
+	sess := m.session
+	return func() tea.Msg {
+		// Write first with placeholder attachment name, or use deterministic name.
+		content := sess.corpusFullReport(meta, "corpus-<timestamp>.md")
+		path, err := writeCorpusReport(content)
 		return actionResult{path: path, err: err}
 	}
 }
@@ -395,6 +441,8 @@ func (m *model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "r", "y":
 			return m, m.share(msg.String() == "y")
+		case "w":
+			return m, m.shareCorpus()
 		case "u":
 			update := m.checkUpstream()
 			if m.portTab && !m.fetching {
@@ -531,12 +579,42 @@ var forkActions = [...]struct{ key, label string }{
 	{"f", "F Choose game folder"},
 }
 
+func (m *model) forkHeaderLines() []string {
+	if m.width < 76 || m.height < 26 {
+		return nil
+	}
+	logo := clip(asciiLogo(), m.width)
+	headerBox := m.headerBox()
+	return append(strings.Split(logo, "\n"), strings.Split(headerBox, "\n")...)
+}
+
 func (m *model) forkGridSize() (cols, rows, start int) {
-	cols = max(1, min(4, m.width/20))
-	rows = max(1, (m.height-10)/3)
+	cols = max(1, min(4, m.width/22))
+	headerH := len(m.forkHeaderLines())
+	rows = max(1, (m.height-12-headerH)/5)
 	perPage := cols * rows
 	start = (m.forkIndex / perPage) * perPage
 	return
+}
+
+func forkTierInfo(build forkBuild, isSelected, isEquipped bool) (color lipgloss.Color, tier, glyph string) {
+	switch build.Name {
+	case nvidiaRTForkName:
+		color, tier, glyph = amber, "COVERT", "╾━╤デ╦︻"
+	case nvidiaForkName:
+		color, tier, glyph = magenta, "CLASSIFIED", "╾━╤デ═"
+	case vilocityForkName:
+		color, tier, glyph = purple, "RESTRICTED", "═╦══━"
+	default:
+		color, tier, glyph = blue, "MIL-SPEC", "╠══━"
+	}
+	if isSelected {
+		return cyan, tier, glyph
+	}
+	if isEquipped {
+		return color, tier, glyph
+	}
+	return color, tier, glyph
 }
 
 func (m *model) forkClick(x, y int) tea.Cmd {
@@ -565,15 +643,18 @@ func (m *model) forkClick(x, y int) tea.Cmd {
 	}
 	cols, gridRows, start := m.forkGridSize()
 	cellWidth := m.width / cols
-	if y >= 3 && y < 3+gridRows*3 && x < cols*cellWidth {
-		index := start + ((y-3)/3)*cols + x/cellWidth
+	gridTop := 3 + len(m.forkHeaderLines())
+	const cellHeight = 5
+	gridBottom := gridTop + gridRows*cellHeight
+	if y >= gridTop && y < gridBottom && x < cols*cellWidth {
+		index := start + ((y-gridTop)/cellHeight)*cols + x/cellWidth
 		if index > len(m.cfg.forks) {
 			index = len(m.cfg.forks)
 		}
 		m.forkIndex = index
 		return m.forkMenuKey("enter")
 	}
-	action := y - (4 + gridRows*3)
+	action := y - (gridBottom + 3)
 	if action >= 0 && action < len(forkActions) {
 		return m.forkMenuKey(forkActions[action].key)
 	}
@@ -584,41 +665,98 @@ func (m *model) forkMenuView() string {
 	if m.width < 32 || m.height < 13 {
 		return clip("Resize terminal • Esc Back", m.width)
 	}
-	rows := []string{heading.Render("VIctory forks")}
+	cols, gridRows, start := m.forkGridSize()
+	perPage := cols * gridRows
+	totalSlots := len(m.cfg.forks) + 1
+	totalPages := max(1, (totalSlots+perPage-1)/perPage)
+	currentPage := (start / perPage) + 1
+
+	headerLine := fmt.Sprintf("LOADOUT // VICTORY-PX INVENTORY   [PAGE %d/%d]", currentPage, totalPages)
+	rows := m.forkHeaderLines()
+	rows = append(rows, heading.Render(headerLine))
 	game := "Choose an executable or folder"
 	if m.cfg.title != "" {
 		game = terminalText(filepath.Base(m.cfg.title))
 	}
-	rows = append(rows, "Game · "+game, muted.Render("Choose a slot"))
-	cols, gridRows, start := m.forkGridSize()
+	rows = append(rows, "TARGET · "+game, muted.Render("Select a build slot to equip"))
+
 	cellWidth := m.width / cols
+	innerWidth := max(4, cellWidth-2)
+	barWidth := max(2, innerWidth-2)
+
 	for row := 0; row < gridRows; row++ {
-		var top, middle, bottom strings.Builder
+		var l0, l1, l2, l3, l4 strings.Builder
 		for col := 0; col < cols; col++ {
 			index := start + row*cols + col
-			label, state := "+ Add build", ""
-			if index < len(m.cfg.forks) {
+			selected := index == m.forkIndex
+
+			borderColor := slate
+			rarityColor := slate
+			title := ""
+			glyphStatus := ""
+			bar := strings.Repeat("░", barWidth)
+
+			switch {
+			case index < len(m.cfg.forks):
 				build := m.cfg.forks[index]
-				label = terminalText(build.label())
-				if build.Name == m.cfg.forkName {
-					state = "ACTIVE"
+				equipped := build.Name == m.cfg.forkName
+				rColor, _, glyph := forkTierInfo(build, selected, equipped)
+				rarityColor = rColor
+				borderColor = rColor
+				if selected {
+					borderColor = cyan
 				}
-			} else if index > len(m.cfg.forks) {
-				label = ""
+				bar = strings.Repeat("▓", barWidth)
+				prefix := "  "
+				status := "READY"
+				if equipped {
+					prefix = "★ "
+					status = "ACTIVE"
+				}
+				title = prefix + terminalText(build.label())
+				glyphStatus = glyph + " " + status
+			case index == len(m.cfg.forks):
+				rarityColor = cyan
+				borderColor = slate
+				if selected {
+					borderColor = cyan
+				}
+				bar = strings.Repeat("▒", barWidth)
+				title = "+ Add build"
+				glyphStatus = "[+] NEW CASE"
 			}
-			color := slate
-			if index == m.forkIndex {
-				color = cyan
-			} else if state != "" {
-				color = blue
+
+			tl, tr, bl, br, hz, vt := "┌", "┐", "└", "┘", "─", "│"
+			if selected {
+				tl, tr, bl, br, hz, vt = "╔", "╗", "╚", "╝", "═", "║"
 			}
-			top.WriteString(ink(color, "┌"+strings.Repeat("─", cellWidth-2)+"┐"))
-			middle.WriteString(ink(color, "│") + fit(clip(label, cellWidth-4), cellWidth-2) + ink(color, "│"))
-			bottom.WriteString(ink(color, "└"+fit(state, cellWidth-2)+"┘"))
+
+			l0.WriteString(ink(borderColor, tl+strings.Repeat(hz, innerWidth)+tr))
+			l1.WriteString(ink(borderColor, vt) + " " + ink(rarityColor, bar) + " " + ink(borderColor, vt))
+			l2.WriteString(ink(borderColor, vt) + fit(clip(title, innerWidth-2), innerWidth) + ink(borderColor, vt))
+			l3.WriteString(ink(borderColor, vt) + fit(clip(glyphStatus, innerWidth-2), innerWidth) + ink(borderColor, vt))
+			l4.WriteString(ink(borderColor, bl+strings.Repeat(hz, innerWidth)+br))
 		}
-		rows = append(rows, top.String(), middle.String(), bottom.String())
+		rows = append(rows, l0.String(), l1.String(), l2.String(), l3.String(), l4.String())
 	}
+
+	// Inspect strip (2 lines + 1 spacer = 3 lines before actions)
 	rows = append(rows, "")
+	if m.forkIndex < len(m.cfg.forks) {
+		build := m.cfg.forks[m.forkIndex]
+		equipped := build.Name == m.cfg.forkName
+		rColor, tier, _ := forkTierInfo(build, false, equipped)
+		status := "READY"
+		if equipped {
+			status = "★ ACTIVE"
+		}
+		inspectTop := fmt.Sprintf("INSPECT: %s  |  Tier: %s  |  %s", terminalText(build.label()), ink(rColor, tier), status)
+		inspectPath := muted.Render(fmt.Sprintf("DIR: %s  •  BIN: %s", terminalText(build.Dir), terminalText(filepath.Base(build.Binary))))
+		rows = append(rows, inspectTop, inspectPath)
+	} else {
+		rows = append(rows, "INSPECT: + Add build  |  Register a compiled VIctory directory & victory.exe", muted.Render("Press Enter or N to open the system file picker"))
+	}
+
 	for _, action := range forkActions {
 		rows = append(rows, ink(blue, action.label))
 	}
@@ -630,7 +768,7 @@ func (m *model) forkMenuView() string {
 	default:
 		rows = append(rows, "")
 	}
-	rows = append(rows, muted.Render("Arrows Select · Enter Open · E Edit · Esc Back"))
+	rows = append(rows, muted.Render("Arrows Select · Enter Equip · E Edit · Esc Back"))
 	for i, row := range rows {
 		rows[i] = clip(row, m.width)
 	}
@@ -846,9 +984,9 @@ func (m *model) compactView() string {
 	if m.notice != "" {
 		rows = append(rows, terminalText(m.notice))
 	}
-	footer := []string{"S Run/stop · T Translate · C Console · Q Quit", "B Forks · Tab/D Display · F Filter · [/] Log · R/Y Report · U"}
+	footer := []string{"S Run/stop · T Translate · C Console · Q Quit", "B Forks · Tab/D Display · F Filter · [/] Log · R/Y/W Report · U"}
 	if m.width < 56 {
-		footer = []string{"S Run/stop · T Translate · Q Quit", "B Forks · Tab/D Display · C Console", "F Filter · [/] Scroll · R/Y Report"}
+		footer = []string{"S Run/stop · T Translate · Q Quit", "B Forks · Tab/D Display · C Console", "F Filter · [/] Scroll · R/Y/W Report"}
 	}
 	if m.displayTab {
 		footer = []string{"Tab PortWatch · S Run/stop · D/Q"}
@@ -1316,8 +1454,9 @@ func (m *model) footer() string {
 	if m.portTab {
 		return join(key("U", "Refresh"), key("Tab", "Monitor"), key("D", "Display"), key("Q", "Quit"))
 	}
-	return join(key("S", "Run/stop"), key("T", "Translate"), key("C", "Console"), key("Tab/D", "Display"), key("B", "Forks")) +
-		"\n" + join(key("F", "Filter"), key("[/]", "Scroll"), key("R", "Report"), key("Y", "Copy"), key("U", "Updates"), key("Q", "Quit"))
+	line1 := join(key("S", "Run/stop"), key("T", "Translate"), key("C", "Console"), key("Tab/D", "Display"), key("B", "Forks"))
+	line2 := join(key("F", "Filter"), key("[/]", "Scroll"), key("R", "Report"), key("Y", "Copy"), key("W", "Corpus"), key("U", "Updates"), key("Q", "Quit"))
+	return clip(line1, m.width) + "\n" + clip(line2, m.width)
 }
 
 func (m *model) bottomPanel(height int) string {
@@ -1366,6 +1505,17 @@ func (m *model) bottomPanel(height int) string {
 	return frame(m.width, height, title, cyan, cyan, body)
 }
 
+func asciiLogo() string {
+	viStyle := lipgloss.NewStyle().Foreground(cyan).Bold(true)
+	ctoryStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#CBD5E1"))
+	shadowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#64748B"))
+
+	l1 := viStyle.Render("██╗   ██╗██╗") + " " + ctoryStyle.Render(" ██████╗████████╗ ██████╗ ██████╗ ██╗   ██╗") + shadowStyle.Render(" ᵖˣ")
+	l2 := viStyle.Render("██║   ██║██║") + " " + ctoryStyle.Render("██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗╚██╗ ██╔╝")
+	l3 := viStyle.Render("╚██████╔╝██║") + " " + shadowStyle.Render("╚██████╗   ██║   ╚██████╔╝██████╔╝ ╚████╔╝ ")
+	return l1 + "\n" + l2 + "\n" + l3
+}
+
 func (m *model) View() string {
 	if m.forkMenu {
 		return m.forkMenuView()
@@ -1374,8 +1524,15 @@ func (m *model) View() string {
 		return m.compactView()
 	}
 	headerBox, tabBar, footer := m.headerBox(), m.tabBar(), m.footer()
-	usedH := lipgloss.Height(headerBox) + lipgloss.Height(tabBar) + lipgloss.Height(footer)
-	sections := []string{headerBox, tabBar}
+	tabRow := clip(tabBar+"  "+keycap(amber, "B")+muted.Render(" Forks"), m.width)
+	var sections []string
+	usedH := lipgloss.Height(headerBox) + lipgloss.Height(tabRow) + lipgloss.Height(footer)
+	if m.height >= 26 {
+		logo := clip(asciiLogo(), m.width)
+		sections = append(sections, logo)
+		usedH += lipgloss.Height(logo)
+	}
+	sections = append(sections, headerBox, tabRow)
 	if !m.portTab && !m.displayTab {
 		midH := min(7, m.height-usedH-9)
 		midCols := m.midPanels(midH)

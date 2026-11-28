@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fork Inventory — victory-px</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <span class="badge">LOADOUT // FORKS · TIERS · EXECUTABLES</span>
+      <h1>Fork Inventory</h1>
+      <p class="subtitle">
+        Manage VIctory builds in the tiered ASCII loadout, browse title executables, and register forks from CLI.
+      </p>
+      <nav class="pills">
+        <a href="index.html">Overview</a>
+        <a href="setup.html">Setup &amp; Launch</a>
+        <a class="active" href="inventory.html">Fork Inventory</a>
+        <a href="display.html">Display &amp; Gamescope</a>
+        <a href="reporting.html">Reporting &amp; Corpus</a>
+      </nav>
+    </header>
+
+    <h2>In-TUI Loadout &amp; Browser</h2>
+    <p>
+      Press <code>B</code> to open the loadout. Use the arrow keys and <code>Enter</code> or click a card. <code>N</code> adds a profile: open the desired directory, press <code>Space</code> to scan it, select a binary if prompted, then name and save the profile. <code>Esc</code> cancels. <code>X</code> opens the highlighted fork folder, and <code>Delete</code> removes the highlighted saved profile while stopped.
+    </p>
+    <p>
+      Press <code>O</code> to browse for the game's executable. <code>Enter</code> opens a directory or selects an executable, and <code>Backspace</code> goes up a directory. <code>V</code> opens the selected game's folder in the desktop file manager. Stop the current session before switching or adding a fork.
+    </p>
+
+    <h2>Rarity Tiers</h2>
+    <p>
+      Fork profiles are organized into tiered slots (<code>Covert</code>, <code>Classified</code>, <code>Restricted</code>, and <code>Mil-Spec</code> for custom builds) so you can quickly distinguish and switch between different VIctory builds.
+    </p>
+
+    <h2>CLI Profiles</h2>
+    <pre><code>px=./victory-px-rs/target/release/victory-px
+"$px" --save-fork my-build --victory-dir /path/to/VIctory --victory-bin /path/to/victory.exe
+"$px" --list-forks
+"$px" --fork my-build --exe /path/to/title.exe</code></pre>
+    <p>
+      Profiles live in <code>${XDG_CONFIG_HOME:-~/.config}/victory-px/forks/</code>. Names use 1 to 40 ASCII letters, digits, dots, underscores or hyphens and start with a letter or digit. The game selection is stored in <code>game.json</code> in the app's config directory (mode <code>0600</code>).
+    </p>
+    <p>
+      Profiles launch the configured <code>victory.exe</code> with the active title executable and selected console profile (<code>run --execute</code>, or fork-specific launch subcommands when configured).
+    </p>
+
+    <footer>
+      <span>victory-px // inventory</span>
+      <span><a href="index.html">Back to Overview</a></span>
+    </footer>
+  </div>
+</body>
+</html>
