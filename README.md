@@ -4,10 +4,6 @@ This guide covers the Rust launcher on the `lighthouse` branch.
 
 > OpenCode-inspired Rust (`ratatui`) TUI launcher, fork loadout, and Lighthouse-style benchmark monitor for **VIctory** builds on Linux.
 
-[![Rust](https://img.shields.io/badge/Rust-2021-orange?style=flat-square&logo=rust)](victory-px-rs/Cargo.toml)
-[![Platform Linux](https://img.shields.io/badge/Platform-Linux%20x86__64-00F0FF?style=flat-square&logo=linux&logoColor=black)](#quick-start)
-[![Docs](https://img.shields.io/badge/Docs-lighthouse-FF2A85?style=flat-square)](docs/index.html)
-
 ---
 
 ## Highlights

@@ -618,20 +618,19 @@ fn draw_top_banner(f: &mut Frame, area: Rect, app: &AppState) {
             Span::styled("▀████   ███    ▀████▀  ███  ███    ███   ", g5),
         ]),
         Line::from(vec![
-            Span::styled(" ◢◤ ", Style::default().fg(MAGENTA)),
             Span::styled(
-                "glitchwd/victory-px",
+                " victory-px",
                 Style::default().fg(TEXT_MAIN).add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 "@lighthouse",
                 Style::default().fg(NEON_GREEN).add_modifier(Modifier::BOLD),
             ),
-            Span::styled("  //  ", Style::default().fg(BORDER_DIM)),
+            Span::styled("    //    ", Style::default().fg(BORDER_DIM)),
             Span::styled("ARCH: x86_64", Style::default().fg(CYAN)),
-            Span::styled("  //  ", Style::default().fg(BORDER_DIM)),
+            Span::styled("    //    ", Style::default().fg(BORDER_DIM)),
             Span::styled("PROTON EXECUTOR", Style::default().fg(TEXT_MUTED)),
-            Span::styled("  //  ", Style::default().fg(BORDER_DIM)),
+            Span::styled("    //    ", Style::default().fg(BORDER_DIM)),
             Span::styled(
                 concat!("v", env!("CARGO_PKG_VERSION")),
                 Style::default().fg(AMBER).add_modifier(Modifier::BOLD),
