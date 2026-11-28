@@ -1,6 +1,9 @@
 name: Linux release
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -11,7 +14,7 @@ concurrency:
 
 jobs:
   publish:
-    if: github.ref == 'refs/heads/lighthouse'
+    if: github.ref == 'refs/heads/lighthouse' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -19,7 +22,6 @@ jobs:
         with:
           persist-credentials: false
       - name: Test and package
-        working-directory: victory-px-rs
         run: |
           rustup toolchain install stable --profile minimal --component clippy
           cargo +stable clippy --locked --all-targets -- -D warnings
@@ -28,7 +30,7 @@ jobs:
       - name: Assemble archive
         run: |
           mkdir -p dist/package
-          cp victory-px-rs/target/release/victory-px dist/package/
+          cp target/release/victory-px dist/package/
           version=$(dist/package/victory-px --version)
           echo "RELEASE_VERSION=v${version#victory-px }" >> "$GITHUB_ENV"
           cp README.md LICENSE dist/package/
