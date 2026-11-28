@@ -12,7 +12,7 @@ This guide covers the Rust launcher on the `lighthouse` branch.
 - **Lighthouse Reports (`3` / `R` / `--bench`)** — Live in-app **Performance / Stability / Headroom** gauges, repeatable headless benchmarks (`--bench --duration 30`), and standalone Chrome Lighthouse-style HTML exports.
 - **Quick Modals** — Gamescope & display config (`G`), integrated `.exe` / folder browser (`O`), and animated **Vice City / GTA VI** logo FX (`T`).
 - **Hardware Vitals** — Live host RAM, CPU, kernel, and GPU load/temp/VRAM for **NVIDIA** (`nvidia-smi`) and **AMD** (`amdgpu` sysfs).
-- **Corpus Export (`W`)** — Markdown bundle with metrics and launch settings for research threads.
+- **Markdown Report Export (`W`)** — Markdown bundle with metrics and launch settings for research threads.
 
 ---
 
@@ -54,7 +54,7 @@ Outputs a Lighthouse HTML report (`lighthouse-*.html`) and a Markdown bundle (`c
 | `G` | Open **Gamescope** quick config modal |
 | `C` | Toggle console profile (`Series X` / `Series S`) |
 | `S` | Start or stop the active session |
-| `R` / `W` | Export **Lighthouse HTML** / **Corpus Markdown** |
+| `R` / `W` | Export **Lighthouse HTML** / **Markdown Report** |
 | `T` | Open **Theme & Logo FX** modal |
 | `X` / `V` | Open highlighted fork folder / game folder in file manager |
 | `Q` / `Ctrl+C` | Stop session and quit (`Ctrl+C` works while typing a profile name) |
@@ -66,4 +66,4 @@ Outputs a Lighthouse HTML report (`lighthouse-*.html`) and a Markdown bundle (`c
 - [Setup & Launch](docs/setup.md)
 - [Fork Inventory](docs/inventory.md)
 - [Display & Gamescope](docs/display.md)
-- [Reporting & Corpus](docs/reporting.md)
+- [Reporting](docs/reporting.md)
