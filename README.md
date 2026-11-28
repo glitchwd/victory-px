@@ -21,14 +21,14 @@ This guide covers the Rust launcher on the `lighthouse` branch.
 Requires **Linux x86_64**, **Rust / Cargo**, **Wine** (or Proton), and a compiled `victory.exe`.
 
 ```sh
-cargo build --release --locked --manifest-path victory-px-rs/Cargo.toml
-./victory-px-rs/target/release/victory-px
+cargo build --release --locked
+./target/release/victory-px
 ```
 
 ### Register a fork from CLI (optional)
 
 ```sh
-./victory-px-rs/target/release/victory-px --save-fork my-fork \
+./target/release/victory-px --save-fork my-fork \
   --victory-dir /path/to/VIctory \
   --victory-bin /path/to/VIctory/victory.exe
 ```
@@ -36,7 +36,7 @@ cargo build --release --locked --manifest-path victory-px-rs/Cargo.toml
 ### Repeatable Headless Benchmark
 
 ```sh
-./victory-px-rs/target/release/victory-px --fork my-fork --exe /path/to/title.exe --bench --duration 30
+./target/release/victory-px --fork my-fork --exe /path/to/title.exe --bench --duration 30
 ```
 
 Outputs a Lighthouse HTML report (`lighthouse-*.html`) and a Markdown bundle (`corpus-*.md`) under `${XDG_STATE_HOME:-~/.local/state}/victory-px/reports/`.
